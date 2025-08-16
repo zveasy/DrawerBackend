@@ -13,6 +13,8 @@
 #include "util/journal.hpp"
 #include "server/http_server.hpp"
 #include "ui/tui.hpp"
+#include "cloud/iot_client.hpp"
+#include "cloud/mqtt_loopback.cpp"
 
 #include <cstdlib>
 #include <iostream>
@@ -32,6 +34,7 @@ int main(int argc, char** argv) {
   bool run_api = false;
   bool run_tui = false;
   int api_port = 8080;
+  bool aws_flag = false;
   for (int i = 1; i < argc; ++i) {
     std::string arg(argv[i]);
     if (arg == "--json") {
@@ -54,14 +57,39 @@ int main(int argc, char** argv) {
     } else if (arg == "--tui") {
       run_api = true; run_tui = true;
       if (i + 1 < argc && argv[i+1][0] != '-') api_port = std::stoi(argv[++i]);
+    } else if (arg == "--aws" && i + 1 < argc) {
+      aws_flag = std::stoi(argv[++i]) != 0;
     }
   }
 
   try {
     cfg::Config cfg = cfg::load();
 
+    std::unique_ptr<IMqttClient> mqtt_client;
+    std::unique_ptr<cloud::IoTClient> iot;
+    bool use_aws = aws_flag || cfg.aws.enable;
+    if (use_aws) {
+      auto loop = std::make_unique<cloud::LoopbackMqttClient>();
+      cloud::IoTOptions opt;
+      opt.topic_prefix = cfg.aws.topic_prefix;
+      opt.thing_name = cfg.aws.thing_name;
+      opt.qos = cfg.aws.qos;
+      opt.queue_dir = cfg.aws.queue_dir;
+      opt.max_queue_bytes = cfg.aws.max_queue_bytes;
+      iot = std::make_unique<cloud::IoTClient>(*loop, opt);
+      iot->set_shadow_callback([&](const std::map<std::string,std::string>& kv){
+        auto it = kv.find("hopper.pulses_per_coin");
+        if(it!=kv.end()) cfg.hopper.pulses_per_coin = std::stoi(it->second);
+        auto it2 = kv.find("presentation.present_ms");
+        if(it2!=kv.end()) cfg.pres.present_ms = std::stoi(it2->second);
+      });
+      iot->start();
+      mqtt_client = std::move(loop);
+    }
+
     if (do_selftest) {
       auto res = selftest::run(cfg);
+      if (iot) iot->publish_health(res.json);
       if (res.ok) {
         std::cout << "SELFTEST OK" << std::endl;
         return 0;
@@ -161,6 +189,7 @@ int main(int argc, char** argv) {
       TxnEngine eng(sh, disp, tcfg);
       if (tcfg.resume_on_start) eng.resume_if_needed();
       auto res = eng.run_purchase(purchase_cents, deposit_cents);
+      if (iot) iot->publish_txn(res);
       bool json = std::getenv("LOG_JSON") && std::string(std::getenv("LOG_JSON")) == "1";
       if (json) {
         std::cout << journal::to_json(res) << std::endl;

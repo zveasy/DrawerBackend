@@ -19,6 +19,11 @@ Config make_defaults() {
   c.audit = {5.670,0.35,0.001,0,8,8,200,3};
   c.pres = {2000};
   c.st = {true};
+  c.aws = {false, "", "REG-01", "REG-01", 
+           "/etc/register-mvp/certs/AmazonRootCA1.pem",
+           "/etc/register-mvp/certs/device.pem.crt",
+           "/etc/register-mvp/certs/private.pem.key",
+           "register/REG-01", 1, "data/awsq", 8ull<<20};
   return c;
 }
 
@@ -185,6 +190,39 @@ Config load() {
             bool def = cfg.st.enable_coin_test;
             try { cfg.st.enable_coin_test = std::stoi(value) != 0; }
             catch (...) { cfg.st.enable_coin_test = def; cfg.warnings.push_back(fullkey + " invalid, using default " + (def?"1":"0")); }
+          } else {
+            handled = false;
+          }
+        } else if (section == "aws") {
+          handled = true;
+          if (key == "enable") {
+            bool def = cfg.aws.enable;
+            try { cfg.aws.enable = std::stoi(value) != 0; }
+            catch (...) { cfg.aws.enable = def; cfg.warnings.push_back(fullkey + " invalid, using default " + (def?"1":"0")); }
+          } else if (key == "endpoint") {
+            cfg.aws.endpoint = value;
+          } else if (key == "thing_name") {
+            cfg.aws.thing_name = value;
+          } else if (key == "client_id") {
+            cfg.aws.client_id = value;
+          } else if (key == "root_ca") {
+            cfg.aws.root_ca = value;
+          } else if (key == "cert") {
+            cfg.aws.cert = value;
+          } else if (key == "key") {
+            cfg.aws.key = value;
+          } else if (key == "topic_prefix") {
+            cfg.aws.topic_prefix = value;
+          } else if (key == "qos") {
+            int def = cfg.aws.qos;
+            try { cfg.aws.qos = std::stoi(value); }
+            catch (...) { cfg.aws.qos = def; cfg.warnings.push_back(fullkey + " invalid, using default " + std::to_string(def)); }
+          } else if (key == "queue_dir") {
+            cfg.aws.queue_dir = value;
+          } else if (key == "max_queue_bytes") {
+            uint64_t def = cfg.aws.max_queue_bytes;
+            try { cfg.aws.max_queue_bytes = std::stoull(value); }
+            catch (...) { cfg.aws.max_queue_bytes = def; cfg.warnings.push_back(fullkey + " invalid, using default " + std::to_string(def)); }
           } else {
             handled = false;
           }
