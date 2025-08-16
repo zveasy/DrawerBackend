@@ -9,6 +9,7 @@ option(USE_MOCK_GPIO "Build with a mock GPIO HAL (no libgpiod)" ON)
 option(USE_AWS_SDK "Build with AWS IoT CRT MQTT client" OFF)
 option(USE_NLOHMANN_JSON "Use nlohmann/json single header" ON)
 option(ENABLE_SERIAL_POS "Build serial POS connector stub" OFF)
+option(ENABLE_OBSERVABILITY "Enable /metrics endpoints" ON)
 
 if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
   add_compile_options(-Wall -Wextra -Wpedantic -O2 -g)
@@ -38,6 +39,15 @@ add_library(util
   src/util/event_log.cpp
 )
 target_include_directories(util PUBLIC . src)
+
+# observability
+add_library(obs
+  src/obs/metrics.cpp
+  src/obs/metrics_endpoint.cpp
+  src/obs/sli_slo.cpp
+)
+target_include_directories(obs PUBLIC . src)
+target_link_libraries(obs PUBLIC httplib::httplib pthread)
 
 # hal
 add_library(hal
@@ -97,7 +107,7 @@ add_library(server
   src/ui/tui.cpp
 )
 target_include_directories(server PUBLIC . src)
-target_link_libraries(server PUBLIC app httplib::httplib pthread)
+target_link_libraries(server PUBLIC app httplib::httplib pthread obs)
 
 # pos connectors
 add_library(pos
@@ -131,7 +141,7 @@ endif()
 
 # main executable
 add_executable(register_mvp src/main.cpp)
-target_link_libraries(register_mvp PRIVATE app drivers hal util cfg server cloud safety pos)
+target_link_libraries(register_mvp PRIVATE app drivers hal util cfg server cloud safety pos obs)
 target_include_directories(register_mvp PRIVATE . src)
 
 if(BUILD_TESTING)

@@ -23,6 +23,7 @@
 #include "safety/faults.hpp"
 #include "app/service_mode.hpp"
 #include "util/event_log.hpp"
+#include "obs/metrics.hpp"
 
 #include <cstdlib>
 #include <iostream>
@@ -83,6 +84,8 @@ int main(int argc, char** argv) {
 
   try {
     cfg::Config cfg = cfg::load();
+    obs::M().gauge("register_device_up", "Device up").set(1);
+    obs::M().gauge("register_build_info", "Build info", {{"version","1.0.0"},{"git","unknown"}}).set(1);
     eventlog::Logger elog(cfg.service.audit_path);
     safety::FaultManager faults(cfg.safety, &elog);
     faults.start();

@@ -1,0 +1,26 @@
+groups:
+- name: register-mvp
+  rules:
+  - alert: SuccessRateLow
+    expr: (1 - (increase(register_txn_total{status="OK"}[30m]) / clamp_min(increase(register_txn_total[30m]),1))) > (1-0.995)
+    for: 10m
+    labels: {severity: page}
+    annotations: {summary: "Success rate below 99.5% (30m)", runbook_url: "https://<repo>/docs/runbooks/SuccessRateLow.md"}
+
+  - alert: JamRateHigh
+    expr: (increase(register_jam_total[1h]) / clamp_min(increase(register_txn_total[1h]),1)) > 0.001
+    for: 15m
+    labels: {severity: page}
+    annotations: {summary: "Jam rate > 1 per 1k txns (1h)", runbook_url: "https://<repo>/docs/runbooks/JamRateHigh.md"}
+
+  - alert: DeviceOffline
+    expr: absent_over_time(register_device_up[5m])
+    for: 5m
+    labels: {severity: page}
+    annotations: {summary: "Device not scraping /metrics", runbook_url: "https://<repo>/docs/runbooks/DeviceOffline.md"}
+
+  - alert: LowCoins
+    expr: max_over_time(register_low_stock[10m]) == 1
+    for: 10m
+    labels: {severity: ticket}
+    annotations: {summary: "Low coin stock for 10m", runbook_url: "https://<repo>/docs/runbooks/LowCoins.md"}
