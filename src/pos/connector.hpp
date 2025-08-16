@@ -4,11 +4,12 @@
 #include "../app/txn_engine.hpp"
 
 namespace pos {
-  struct Options {
+struct Options {
     std::string bind = "127.0.0.1";
     int port = 9090;
     std::string shared_key; // optional
-  };
+    std::string vendor_mode = "A"; // "A" or "B"
+};
 
   class Connector {
   public:
