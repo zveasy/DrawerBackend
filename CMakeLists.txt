@@ -72,6 +72,9 @@ add_library(app
   src/app/dispense_adapter.cpp
   src/app/txn_engine.cpp
   src/app/selftest.cpp
+  src/app/inventory.cpp
+  src/app/multi_dispenser.cpp
+  src/app/change_maker.cpp
 )
 target_include_directories(app PUBLIC . src)
 target_link_libraries(app PUBLIC drivers hal util)
