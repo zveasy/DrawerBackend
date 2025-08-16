@@ -1,0 +1,12 @@
+{
+  "title": "Register MVP",
+  "panels": [
+    {"type": "stat", "title": "Success rate 30m", "targets": [{"expr": "increase(register_txn_total{status=\"OK\"}[30m]) / increase(register_txn_total[30m])"}]},
+    {"type": "timeseries", "title": "Jam rate per 1k", "targets": [{"expr": "(increase(register_jam_total[5m]) / increase(register_txn_total[5m]))*1000"}]},
+    {"type": "timeseries", "title": "Purchase latency", "targets": [{"expr": "histogram_quantile(0.95, sum(rate(register_purchase_duration_ms_bucket[5m])) by (le))"}]},
+    {"type": "table", "title": "Inventory", "targets": [{"expr": "register_inventory_coins"}]},
+    {"type": "stat", "title": "Uptime", "targets": [{"expr": "register_device_up"}]},
+    {"type": "stat", "title": "Last txn", "targets": [{"expr": "register_last_txn_ts_seconds"}]},
+    {"type": "bargauge", "title": "Faults", "targets": [{"expr": "rate(register_faults_total[5m])"}]}
+  ]
+}

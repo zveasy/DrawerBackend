@@ -3,6 +3,7 @@
 #include <sstream>
 #include <algorithm>
 #include <chrono>
+#include "obs/metrics.hpp"
 
 struct HttpServer::Impl {
   httplib::Server server;
@@ -154,5 +155,14 @@ void HttpServer::setup_routes() {
     }
     res.status = 400;
     res.set_content("{\"ok\":false,\"reason\":\"bad\"}", "application/json");
+  });
+
+  svr.Get("/metrics", [](const httplib::Request&, httplib::Response& res){
+    std::ostringstream oss; obs::M().to_prometheus(oss);
+    res.set_content(oss.str(), "text/plain");
+  });
+  svr.Get("/metrics.json", [](const httplib::Request&, httplib::Response& res){
+    std::ostringstream oss; obs::M().to_json(oss);
+    res.set_content(oss.str(), "application/json");
   });
 }

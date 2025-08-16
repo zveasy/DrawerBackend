@@ -38,15 +38,8 @@ void log(LogLevel lvl, const std::string& msg,
     std::ostringstream oss;
     oss << "{\"ts\":\"" << timestamp() << "\",\"level\":\"" << level_str(lvl)
         << "\",\"msg\":\"" << msg << "\"";
-    if (!kv.empty()) {
-      oss << ",\"kv\":{";
-      bool first=true;
-      for (const auto& p:kv) {
-        if(!first) oss << ",";
-        first=false;
-        oss << "\"" << p.first << "\":\"" << p.second << "\"";
-      }
-      oss << "}";
+    for (const auto& p : kv) {
+      oss << ",\"" << p.first << "\":\"" << p.second << "\"";
     }
     oss << "}";
     std::cout << oss.str() << std::endl;
