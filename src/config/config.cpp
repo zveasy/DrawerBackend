@@ -26,6 +26,7 @@ Config make_defaults() {
            "register/REG-01", 1, "data/awsq", 8ull<<20};
   c.safety = {-1,-1,-1,true,10};
   c.service = {true,"1234",3,3,150,2,"data/service.log"};
+  c.pos = {true,9090,""};
   return c;
 }
 
@@ -272,6 +273,21 @@ Config load() {
             catch (...) { cfg.service.hopper_max_retries = def; cfg.warnings.push_back(fullkey + " invalid, using default " + std::to_string(def)); }
           } else if (key == "audit_path") {
             cfg.service.audit_path = value;
+          } else {
+            handled = false;
+          }
+        } else if (section == "pos") {
+          handled = true;
+          if (key == "enable_http") {
+            bool def = cfg.pos.enable_http;
+            try { cfg.pos.enable_http = std::stoi(value) != 0; }
+            catch (...) { cfg.pos.enable_http = def; cfg.warnings.push_back(fullkey + " invalid, using default " + (def?"1":"0")); }
+          } else if (key == "port") {
+            int def = cfg.pos.port;
+            try { cfg.pos.port = std::stoi(value); }
+            catch (...) { cfg.pos.port = def; cfg.warnings.push_back(fullkey + " invalid, using default " + std::to_string(def)); }
+          } else if (key == "key") {
+            cfg.pos.key = value;
           } else {
             handled = false;
           }

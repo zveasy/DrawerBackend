@@ -16,6 +16,7 @@
 #include "util/log.hpp"
 #include "util/journal.hpp"
 #include "server/http_server.hpp"
+#include "pos/http_pos.hpp"
 #include "ui/tui.hpp"
 #include "cloud/iot_client.hpp"
 #include "cloud/mqtt_loopback.cpp"
@@ -41,6 +42,8 @@ int main(int argc, char** argv) {
   bool run_api = false;
   bool run_tui = false;
   int api_port = 8080;
+  bool pos_http = false;
+  int pos_port = -1;
   bool aws_flag = false;
   bool service_cli = false;
   std::string service_pin;
@@ -72,6 +75,9 @@ int main(int argc, char** argv) {
       if (i + 1 < argc && argv[i+1][0] != '-') api_port = std::stoi(argv[++i]);
     } else if (arg == "--aws" && i + 1 < argc) {
       aws_flag = std::stoi(argv[++i]) != 0;
+    } else if (arg == "--pos-http") {
+      pos_http = true;
+      if (i + 1 < argc && argv[i+1][0] != '-') pos_port = std::stoi(argv[++i]);
     }
   }
 
@@ -88,6 +94,13 @@ int main(int argc, char** argv) {
     std::unique_ptr<IMqttClient> mqtt_client;
     std::unique_ptr<cloud::IoTClient> iot;
     bool use_aws = aws_flag || cfg.aws.enable;
+
+    bool any_action = demo_shutter || use_scale || do_selftest || dispense_n >= 0 ||
+                      purchase_cents >= 0 || run_api || run_tui || service_cli;
+    if (!pos_http && !any_action && cfg.pos.enable_http) {
+      pos_http = true;
+    }
+    if (pos_port < 0) pos_port = cfg.pos.port;
     if (use_aws) {
       auto loop = std::make_unique<cloud::LoopbackMqttClient>();
       cloud::IoTOptions opt;
@@ -182,6 +195,38 @@ int main(int argc, char** argv) {
         srv.stop();
         return 0;
       }
+      while (true) std::this_thread::sleep_for(std::chrono::seconds(60));
+      return 0;
+    }
+
+    if (pos_http) {
+      Stepper step(*chip, cfg.pins.step, cfg.pins.dir, cfg.pins.enable,
+                   cfg.pins.limit_open, cfg.pins.limit_closed,
+                   cfg.mech.steps_per_mm, 400, 80);
+      ShutterFSM fsm(step, 5, cfg.mech.max_mm);
+      ShutterAdapter sh(fsm);
+      HopperParallel hopper(*chip, cfg.pins.hopper_en, cfg.pins.hopper_pulse,
+                            true, cfg.hopper.pulses_per_coin,
+                            cfg.hopper.min_edge_interval_us);
+      DispenseConfig dcfg;
+      dcfg.jam_ms = cfg.disp.jam_ms;
+      dcfg.settle_ms = cfg.disp.settle_ms;
+      dcfg.max_ms_per_coin = cfg.disp.max_ms_per_coin;
+      dcfg.hard_timeout_ms = cfg.disp.hard_timeout_ms;
+      DispenseController dctrl(hopper, dcfg);
+      dctrl.loadCalibration();
+      DispenseAdapter disp(dctrl);
+      TxnConfig tcfg;
+      tcfg.open_mm = cfg.mech.open_mm;
+      tcfg.present_ms = cfg.pres.present_ms;
+      TxnEngine eng(sh, disp, tcfg, &faults);
+      if (tcfg.resume_on_start) eng.resume_if_needed();
+      pos::Options popt;
+      popt.port = pos_port;
+      popt.shared_key = cfg.pos.key;
+      pos::HttpConnector conn(eng, popt);
+      if (!conn.start()) return 1;
+      std::cout << "POS listening on " << popt.bind << ":" << conn.port() << std::endl;
       while (true) std::this_thread::sleep_for(std::chrono::seconds(60));
       return 0;
     }
