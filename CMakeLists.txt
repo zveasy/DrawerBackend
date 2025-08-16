@@ -18,6 +18,8 @@ FetchContent_Declare(cpphttplib
 FetchContent_MakeAvailable(cpphttplib)
 add_library(httplib::httplib ALIAS httplib)
 
+find_package(nlohmann_json 3.2.0 REQUIRED)
+
 # util
 add_library(util
   util/log.cpp
@@ -80,9 +82,16 @@ add_library(cfg
 )
 target_include_directories(cfg PUBLIC . src)
 
+# cloud
+add_library(cloud
+  src/cloud/iot_client.cpp
+)
+target_include_directories(cloud PUBLIC . src)
+target_link_libraries(cloud PUBLIC util nlohmann_json::nlohmann_json paho-mqttpp3 paho-mqtt3as)
+
 # main executable
 add_executable(register_mvp src/main.cpp)
-target_link_libraries(register_mvp PRIVATE app drivers hal util cfg server)
+target_link_libraries(register_mvp PRIVATE app drivers hal util cfg server cloud)
 target_include_directories(register_mvp PRIVATE . src)
 
 enable_testing()
