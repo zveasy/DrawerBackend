@@ -1,0 +1,6 @@
+function(find_gpiod)
+  find_package(PkgConfig REQUIRED)
+  pkg_check_modules(GPIOD REQUIRED libgpiod)
+  set(GPIOD_INCLUDE_DIRS ${GPIOD_INCLUDE_DIRS} PARENT_SCOPE)
+  set(GPIOD_LIBRARIES ${GPIOD_LIBRARIES} PARENT_SCOPE)
+endfunction()
