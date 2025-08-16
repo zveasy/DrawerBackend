@@ -34,6 +34,7 @@ add_library(util
   src/util/journal.cpp
   src/util/metrics.cpp
   src/util/fs.cpp
+  src/util/event_log.cpp
 )
 target_include_directories(util PUBLIC . src)
 
@@ -63,6 +64,13 @@ add_library(drivers
 target_include_directories(drivers PUBLIC . src)
 target_link_libraries(drivers PUBLIC hal)
 
+# safety
+add_library(safety
+  src/safety/faults.cpp
+)
+target_include_directories(safety PUBLIC . src)
+target_link_libraries(safety PUBLIC hal util)
+
 # app
 add_library(app
   src/app/shutter_fsm.cpp
@@ -75,9 +83,11 @@ add_library(app
   src/app/inventory.cpp
   src/app/multi_dispenser.cpp
   src/app/change_maker.cpp
+  src/app/service_mode.cpp
+  src/app/jam_clear.cpp
 )
 target_include_directories(app PUBLIC . src)
-target_link_libraries(app PUBLIC drivers hal util)
+target_link_libraries(app PUBLIC drivers hal util safety)
 
 # server / api
 add_library(server
@@ -108,7 +118,7 @@ endif()
 
 # main executable
 add_executable(register_mvp src/main.cpp)
-target_link_libraries(register_mvp PRIVATE app drivers hal util cfg server cloud)
+target_link_libraries(register_mvp PRIVATE app drivers hal util cfg server cloud safety)
 target_include_directories(register_mvp PRIVATE . src)
 
 enable_testing()

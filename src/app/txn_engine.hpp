@@ -10,9 +10,12 @@ struct TxnConfig {
   bool resume_on_start = true;
 };
 
+namespace safety { class FaultManager; }
+
 class TxnEngine {
 public:
-  TxnEngine(IShutter& shutter, IDispenser& dispenser, const TxnConfig& cfg);
+  TxnEngine(IShutter& shutter, IDispenser& dispenser, const TxnConfig& cfg,
+            safety::FaultManager* fm=nullptr);
   journal::Txn run_purchase(int price_cents, int deposit_cents);
   journal::Txn resume_if_needed();
 private:
@@ -20,4 +23,5 @@ private:
   IShutter& sh_;
   IDispenser& disp_;
   TxnConfig cfg_;
+  safety::FaultManager* fm_;
 };

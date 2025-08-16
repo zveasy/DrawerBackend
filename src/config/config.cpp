@@ -19,11 +19,13 @@ Config make_defaults() {
   c.audit = {5.670,0.35,0.001,0,8,8,200,3};
   c.pres = {2000};
   c.st = {true};
-  c.aws = {false, "", "REG-01", "REG-01", 
+  c.aws = {false, "", "REG-01", "REG-01",
            "/etc/register-mvp/certs/AmazonRootCA1.pem",
            "/etc/register-mvp/certs/device.pem.crt",
            "/etc/register-mvp/certs/private.pem.key",
            "register/REG-01", 1, "data/awsq", 8ull<<20};
+  c.safety = {-1,-1,-1,true,10};
+  c.service = {true,"1234",3,3,150,2,"data/service.log"};
   return c;
 }
 
@@ -223,6 +225,53 @@ Config load() {
             uint64_t def = cfg.aws.max_queue_bytes;
             try { cfg.aws.max_queue_bytes = std::stoull(value); }
             catch (...) { cfg.aws.max_queue_bytes = def; cfg.warnings.push_back(fullkey + " invalid, using default " + std::to_string(def)); }
+          } else {
+            handled = false;
+          }
+        } else if (section == "safety") {
+          handled = true;
+          int* target = nullptr;
+          if (key == "estop_pin") target = &cfg.safety.estop_pin;
+          else if (key == "lid_tamper_pin") target = &cfg.safety.lid_tamper_pin;
+          else if (key == "overcurrent_pin") target = &cfg.safety.overcurrent_pin;
+          else if (key == "debounce_ms") target = &cfg.safety.debounce_ms;
+          if (key == "active_high") {
+            bool def = cfg.safety.active_high;
+            try { cfg.safety.active_high = std::stoi(value) != 0; }
+            catch (...) { cfg.safety.active_high = def; cfg.warnings.push_back(fullkey + " invalid, using default " + (def?"1":"0")); }
+          } else if (target) {
+            int def = *target;
+            try { *target = std::stoi(value); }
+            catch (...) { *target = def; cfg.warnings.push_back(fullkey + " invalid, using default " + std::to_string(def)); }
+          } else {
+            handled = false;
+          }
+        } else if (section == "service") {
+          handled = true;
+          if (key == "enable") {
+            bool def = cfg.service.enable;
+            try { cfg.service.enable = std::stoi(value) != 0; }
+            catch (...) { cfg.service.enable = def; cfg.warnings.push_back(fullkey + " invalid, using default " + (def?"1":"0")); }
+          } else if (key == "pin_code") {
+            cfg.service.pin_code = value;
+          } else if (key == "jam_clear_shutter_mm") {
+            int def = cfg.service.jam_clear_shutter_mm;
+            try { cfg.service.jam_clear_shutter_mm = std::stoi(value); }
+            catch (...) { cfg.service.jam_clear_shutter_mm = def; cfg.warnings.push_back(fullkey + " invalid, using default " + std::to_string(def)); }
+          } else if (key == "jam_clear_cycles") {
+            int def = cfg.service.jam_clear_cycles;
+            try { cfg.service.jam_clear_cycles = std::stoi(value); }
+            catch (...) { cfg.service.jam_clear_cycles = def; cfg.warnings.push_back(fullkey + " invalid, using default " + std::to_string(def)); }
+          } else if (key == "hopper_nudge_ms") {
+            int def = cfg.service.hopper_nudge_ms;
+            try { cfg.service.hopper_nudge_ms = std::stoi(value); }
+            catch (...) { cfg.service.hopper_nudge_ms = def; cfg.warnings.push_back(fullkey + " invalid, using default " + std::to_string(def)); }
+          } else if (key == "hopper_max_retries") {
+            int def = cfg.service.hopper_max_retries;
+            try { cfg.service.hopper_max_retries = std::stoi(value); }
+            catch (...) { cfg.service.hopper_max_retries = def; cfg.warnings.push_back(fullkey + " invalid, using default " + std::to_string(def)); }
+          } else if (key == "audit_path") {
+            cfg.service.audit_path = value;
           } else {
             handled = false;
           }

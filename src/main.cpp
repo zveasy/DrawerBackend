@@ -19,6 +19,9 @@
 #include "ui/tui.hpp"
 #include "cloud/iot_client.hpp"
 #include "cloud/mqtt_loopback.cpp"
+#include "safety/faults.hpp"
+#include "app/service_mode.hpp"
+#include "util/event_log.hpp"
 
 #include <cstdlib>
 #include <iostream>
@@ -39,6 +42,8 @@ int main(int argc, char** argv) {
   bool run_tui = false;
   int api_port = 8080;
   bool aws_flag = false;
+  bool service_cli = false;
+  std::string service_pin;
   for (int i = 1; i < argc; ++i) {
     std::string arg(argv[i]);
     if (arg == "--json") {
@@ -55,6 +60,10 @@ int main(int argc, char** argv) {
       deposit_cents = std::stoi(argv[++i]);
     } else if (arg == "--selftest") {
       do_selftest = true;
+    } else if (arg == "--service") {
+      service_cli = true;
+    } else if (arg == "--pin" && i + 1 < argc) {
+      service_pin = argv[++i];
     } else if (arg == "--api") {
       run_api = true;
       if (i + 1 < argc && argv[i+1][0] != '-') api_port = std::stoi(argv[++i]);
@@ -68,6 +77,13 @@ int main(int argc, char** argv) {
 
   try {
     cfg::Config cfg = cfg::load();
+    eventlog::Logger elog(cfg.service.audit_path);
+    safety::FaultManager faults(cfg.safety, &elog);
+    faults.start();
+    ServiceMode svc(cfg.service, faults, elog);
+    if(service_cli && svc.active()==false){
+      svc.enter(service_pin.empty()?cfg.service.pin_code:service_pin);
+    }
 
     std::unique_ptr<IMqttClient> mqtt_client;
     std::unique_ptr<cloud::IoTClient> iot;
@@ -156,7 +172,7 @@ int main(int argc, char** argv) {
       TxnConfig tcfg;
       tcfg.open_mm = cfg.mech.open_mm;
       tcfg.present_ms = cfg.pres.present_ms;
-      TxnEngine eng(sh, disp, tcfg);
+      TxnEngine eng(sh, disp, tcfg, &faults);
       if (tcfg.resume_on_start) eng.resume_if_needed();
       HttpServer srv(eng, sh, disp);
       if (!srv.start("127.0.0.1", api_port)) return 1;
