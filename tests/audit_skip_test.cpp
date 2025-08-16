@@ -1,0 +1,22 @@
+#include <gtest/gtest.h>
+#include <cstdio>
+#include <string>
+
+#include "../src/app/audit.hpp"
+
+TEST(AuditSkip, NullScale) {
+  audit::Config cfg;
+  auto res = audit::run(nullptr, cfg, 3);
+  EXPECT_TRUE(res.skipped);
+}
+
+TEST(AuditSkip, CliSkips) {
+  FILE* fp = popen("../register_mvp --dispense 3 --json", "r");
+  ASSERT_NE(fp, nullptr);
+  char buf[256];
+  std::string out;
+  while (fgets(buf, sizeof(buf), fp)) out += buf;
+  int rc = pclose(fp);
+  EXPECT_NE(rc, -1);
+  EXPECT_NE(out.find("\"skipped\":true"), std::string::npos);
+}

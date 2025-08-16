@@ -41,21 +41,22 @@ add_library(drivers
   src/drivers/hopper_parallel.cpp
   src/drivers/hx711.cpp
 )
-target_include_directories(drivers PUBLIC src .)
+target_include_directories(drivers PUBLIC . src)
 target_link_libraries(drivers PUBLIC hal)
 
 # app
 add_library(app
   src/app/shutter_fsm.cpp
   src/app/dispense_ctrl.cpp
+  src/app/audit.cpp
 )
-target_include_directories(app PUBLIC src .)
+target_include_directories(app PUBLIC . src)
 target_link_libraries(app PUBLIC drivers hal util)
 
 # main executable
 add_executable(register_mvp src/main.cpp)
 target_link_libraries(register_mvp PRIVATE app drivers hal util)
-target_include_directories(register_mvp PRIVATE src .)
+target_include_directories(register_mvp PRIVATE . src)
 
 enable_testing()
 add_subdirectory(tests)
