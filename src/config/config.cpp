@@ -30,6 +30,9 @@ Config make_defaults() {
   c.service = {true,"1234",3,3,150,2,"data/service.log"};
   c.pos = {true,9090,""};
   c.ota = {false, "local", "", "stable", "default", 300, "/var/lib/register-mvp/ota", "", 180, true};
+  c.mfg = {1, "file://stdout", "assets/labels/Device_Label.svg", "Acme Retail"};
+  c.eol = {0.35,3,40,1500,1,10,"/var/lib/register-mvp/eol"};
+  c.burnin = {500,250,true,"/var/log/register-mvp/burnin.jsonl"};
   return c;
 }
 
@@ -374,6 +377,71 @@ Config load() {
             bool def = cfg.ota.require_signed;
             try { cfg.ota.require_signed = std::stoi(value) != 0; }
             catch (...) { cfg.ota.require_signed = def; cfg.warnings.push_back(fullkey + " invalid, using default " + (def?"1":"0")); }
+          } else {
+            handled = false;
+          }
+        } else if (section == "manufacturing") {
+          handled = true;
+          if (key == "enable_first_boot_eol") {
+            bool def = cfg.mfg.enable_first_boot_eol;
+            try { cfg.mfg.enable_first_boot_eol = std::stoi(value) != 0; }
+            catch(...) { cfg.mfg.enable_first_boot_eol = def; cfg.warnings.push_back(fullkey + " invalid, using default " + (def?"1":"0")); }
+          } else if (key == "label_printer_uri") {
+            cfg.mfg.label_printer_uri = value;
+          } else if (key == "label_template") {
+            cfg.mfg.label_template = value;
+          } else if (key == "company_name") {
+            cfg.mfg.company_name = value;
+          } else {
+            handled = false;
+          }
+        } else if (section == "eol") {
+          handled = true;
+          if (key == "weigh_tolerance_g") {
+            double def = cfg.eol.weigh_tolerance_g;
+            try { cfg.eol.weigh_tolerance_g = std::stod(value); }
+            catch(...) { cfg.eol.weigh_tolerance_g = def; cfg.warnings.push_back(fullkey + " invalid, using default "+std::to_string(def)); }
+          } else if (key == "coins_for_test") {
+            int def = cfg.eol.coins_for_test;
+            try { cfg.eol.coins_for_test = std::stoi(value); }
+            catch(...) { cfg.eol.coins_for_test = def; cfg.warnings.push_back(fullkey+" invalid, using default "+std::to_string(def)); }
+          } else if (key == "open_mm") {
+            int def = cfg.eol.open_mm;
+            try { cfg.eol.open_mm = std::stoi(value); }
+            catch(...) { cfg.eol.open_mm = def; cfg.warnings.push_back(fullkey+" invalid, using default "+std::to_string(def)); }
+          } else if (key == "present_ms") {
+            int def = cfg.eol.present_ms;
+            try { cfg.eol.present_ms = std::stoi(value); }
+            catch(...) { cfg.eol.present_ms = def; cfg.warnings.push_back(fullkey+" invalid, using default "+std::to_string(def)); }
+          } else if (key == "retries") {
+            int def = cfg.eol.retries;
+            try { cfg.eol.retries = std::stoi(value); }
+            catch(...) { cfg.eol.retries = def; cfg.warnings.push_back(fullkey+" invalid, using default "+std::to_string(def)); }
+          } else if (key == "min_success_txn_visible_seconds") {
+            int def = cfg.eol.min_success_txn_visible_seconds;
+            try { cfg.eol.min_success_txn_visible_seconds = std::stoi(value); }
+            catch(...) { cfg.eol.min_success_txn_visible_seconds = def; cfg.warnings.push_back(fullkey+" invalid, using default "+std::to_string(def)); }
+          } else if (key == "result_dir") {
+            cfg.eol.result_dir = value;
+          } else {
+            handled = false;
+          }
+        } else if (section == "burnin") {
+          handled = true;
+          if (key == "cycles") {
+            int def = cfg.burnin.cycles;
+            try { cfg.burnin.cycles = std::stoi(value); }
+            catch(...) { cfg.burnin.cycles = def; cfg.warnings.push_back(fullkey+" invalid, using default "+std::to_string(def)); }
+          } else if (key == "rest_ms") {
+            int def = cfg.burnin.rest_ms;
+            try { cfg.burnin.rest_ms = std::stoi(value); }
+            catch(...) { cfg.burnin.rest_ms = def; cfg.warnings.push_back(fullkey+" invalid, using default "+std::to_string(def)); }
+          } else if (key == "abort_on_fault") {
+            bool def = cfg.burnin.abort_on_fault;
+            try { cfg.burnin.abort_on_fault = std::stoi(value) != 0; }
+            catch(...) { cfg.burnin.abort_on_fault = def; cfg.warnings.push_back(fullkey+" invalid, using default "+(def?"1":"0")); }
+          } else if (key == "log_path") {
+            cfg.burnin.log_path = value;
           } else {
             handled = false;
           }

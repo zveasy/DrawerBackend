@@ -82,6 +82,30 @@ struct Identity {
   std::string device_id_prefix{"REG"};
 };
 
+struct Manufacturing {
+  bool enable_first_boot_eol{1};
+  std::string label_printer_uri{"file://stdout"};
+  std::string label_template{"assets/labels/Device_Label.svg"};
+  std::string company_name{"Acme Retail"};
+};
+
+struct EolCfg {
+  double weigh_tolerance_g{0.35};
+  int coins_for_test{3};
+  int open_mm{40};
+  int present_ms{1500};
+  int retries{1};
+  int min_success_txn_visible_seconds{10};
+  std::string result_dir{"/var/lib/register-mvp/eol"};
+};
+
+struct BurnInCfg {
+  int cycles{500};
+  int rest_ms{250};
+  bool abort_on_fault{1};
+  std::string log_path{"/var/log/register-mvp/burnin.jsonl"};
+};
+
 struct Config {
   Pins pins{};
   Mechanics mech{};
@@ -97,6 +121,9 @@ struct Config {
   Service service{};
   Pos pos{};
   Ota ota{};
+  Manufacturing mfg{};
+  EolCfg eol{};
+  BurnInCfg burnin{};
   std::string source_path; // loaded from
   std::vector<std::string> warnings; // invalid keys/values
 };

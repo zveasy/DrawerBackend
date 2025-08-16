@@ -1,0 +1,13 @@
+[Unit]
+Description=Register MVP EOL Runner (first boot)
+ConditionPathExists=!/var/lib/register-mvp/eol/PASS
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=registermvp
+Group=registermvp
+ExecStart=/opt/register_mvp/bin/register_mvp --eol
+WorkingDirectory=/opt/register_mvp
+Environment=REGISTER_MVP_CONFIG=/etc/register-mvp/config.ini
