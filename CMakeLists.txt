@@ -15,6 +15,7 @@ endif()
 add_library(util
   util/log.cpp
   src/util/persist.cpp
+  src/util/journal.cpp
 )
 target_include_directories(util PUBLIC . src)
 
@@ -49,6 +50,9 @@ add_library(app
   src/app/shutter_fsm.cpp
   src/app/dispense_ctrl.cpp
   src/app/audit.cpp
+  src/app/shutter_adapter.cpp
+  src/app/dispense_adapter.cpp
+  src/app/txn_engine.cpp
 )
 target_include_directories(app PUBLIC . src)
 target_link_libraries(app PUBLIC drivers hal util)

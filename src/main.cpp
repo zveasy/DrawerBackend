@@ -2,9 +2,13 @@
 #include "drivers/stepper.hpp"
 #include "app/shutter_fsm.hpp"
 #include "app/dispense_ctrl.hpp"
+#include "app/txn_engine.hpp"
+#include "app/shutter_adapter.hpp"
+#include "app/dispense_adapter.hpp"
 #include "app/audit.hpp"
 #include "drivers/hx711.hpp"
 #include "util/log.hpp"
+#include "util/journal.hpp"
 
 #include <cstdlib>
 #include <iostream>
@@ -27,6 +31,8 @@ int main(int argc, char** argv) {
   bool demo_shutter = false;
   bool use_scale = false;
   int dispense_n = -1;
+  int purchase_cents = -1;
+  int deposit_cents = -1;
   for (int i = 1; i < argc; ++i) {
     std::string arg(argv[i]);
     if (arg == "--json") {
@@ -37,6 +43,10 @@ int main(int argc, char** argv) {
       use_scale = true;
     } else if (arg == "--dispense" && i + 1 < argc) {
       dispense_n = std::stoi(argv[++i]);
+    } else if (arg == "--purchase" && i + 1 < argc) {
+      purchase_cents = std::stoi(argv[++i]);
+    } else if (arg == "--deposit" && i + 1 < argc) {
+      deposit_cents = std::stoi(argv[++i]);
     }
   }
 
@@ -53,6 +63,34 @@ int main(int argc, char** argv) {
         fsm.tick();
       }
       return fsm.state() == ShutterState::CLOSED ? 0 : 1;
+    }
+
+    if (purchase_cents >= 0 && deposit_cents >= 0) {
+      Stepper step(*chip, PIN_STEP, PIN_DIR, PIN_EN, PIN_OPEN, PIN_CLOSED,
+                   /*steps_per_mm=*/40, /*pulse_us=*/400, /*rpm=*/80);
+      ShutterFSM fsm(step, 5, 80);
+      ShutterAdapter sh(fsm);
+      HopperParallel hopper(*chip, PIN_HOPPER_EN, PIN_HOPPER_P);
+      DispenseConfig dcfg;
+      DispenseController dctrl(hopper, dcfg);
+      dctrl.loadCalibration();
+      DispenseAdapter disp(dctrl);
+      TxnConfig tcfg;
+      TxnEngine eng(sh, disp, tcfg);
+      if (tcfg.resume_on_start) eng.resume_if_needed();
+      auto res = eng.run_purchase(purchase_cents, deposit_cents);
+      bool json = std::getenv("LOG_JSON") && std::string(std::getenv("LOG_JSON")) == "1";
+      if (json) {
+        std::cout << journal::to_json(res) << std::endl;
+      } else {
+        if (res.phase == "DONE") {
+          std::cout << "OK quarters=" << res.quarters
+                    << " open=" << tcfg.present_ms << "ms" << std::endl;
+        } else {
+          std::cout << "VOID reason=" << res.reason << std::endl;
+        }
+      }
+      return res.phase == "DONE" ? 0 : 1;
     }
 
     if (dispense_n >= 0) {
