@@ -158,6 +158,17 @@ endif()
 target_link_libraries(http_handlers_test gtest_main app drivers hal util server)
 gtest_discover_tests(http_handlers_test)
 
+add_executable(compliance_mode_flags_test compliance_mode_flags_test.cpp)
+target_include_directories(compliance_mode_flags_test PRIVATE .. ../src)
+target_compile_features(compliance_mode_flags_test PRIVATE cxx_std_17)
+if (CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+  target_compile_options(compliance_mode_flags_test PRIVATE -Wall -Wextra -Wpedantic -O2 -g)
+endif()
+target_link_libraries(compliance_mode_flags_test gtest_main app drivers hal util safety compliance)
+gtest_discover_tests(compliance_mode_flags_test)
+
+add_test(NAME power_budget_script_test COMMAND bash ${CMAKE_CURRENT_SOURCE_DIR}/power_budget_script_test.sh WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
+
 add_executable(http_concurrency_test http_concurrency_test.cpp)
 target_include_directories(http_concurrency_test PRIVATE .. ../src)
 target_compile_features(http_concurrency_test PRIVATE cxx_std_17)

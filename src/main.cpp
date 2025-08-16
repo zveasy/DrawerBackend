@@ -24,6 +24,7 @@
 #include "app/service_mode.hpp"
 #include "util/event_log.hpp"
 #include "obs/metrics.hpp"
+#include "compliance/compliance_mode.hpp"
 
 #include <cstdlib>
 #include <iostream>
@@ -48,6 +49,8 @@ int main(int argc, char** argv) {
   bool aws_flag = false;
   bool service_cli = false;
   std::string service_pin;
+  compliance::ComplianceMode comp_mode = compliance::ComplianceMode::NONE;
+  int prescan_cycles = 0;
   for (int i = 1; i < argc; ++i) {
     std::string arg(argv[i]);
     if (arg == "--json") {
@@ -79,6 +82,13 @@ int main(int argc, char** argv) {
     } else if (arg == "--pos-http") {
       pos_http = true;
       if (i + 1 < argc && argv[i+1][0] != '-') pos_port = std::stoi(argv[++i]);
+    } else if (arg == "--compliance-mode" && i + 1 < argc) {
+      std::string m = argv[++i];
+      if (m == "emi_worst") comp_mode = compliance::ComplianceMode::EMI_WORST;
+      else if (m == "emi_idle") comp_mode = compliance::ComplianceMode::EMI_IDLE;
+      else if (m == "esd_safe") comp_mode = compliance::ComplianceMode::ESD_SAFE;
+    } else if (arg == "--prescan-cycle" && i + 1 < argc) {
+      prescan_cycles = std::stoi(argv[++i]);
     }
   }
 
@@ -89,6 +99,16 @@ int main(int argc, char** argv) {
     eventlog::Logger elog(cfg.service.audit_path);
     safety::FaultManager faults(cfg.safety, &elog);
     faults.start();
+    compliance::init(&faults, &elog);
+    if (comp_mode != compliance::ComplianceMode::NONE) {
+      compliance::set_mode(comp_mode);
+      if (prescan_cycles > 0) {
+        for (int i = 0; i < prescan_cycles; ++i) {
+          compliance::run_emi_worst_pattern_once();
+        }
+        return 0;
+      }
+    }
     ServiceMode svc(cfg.service, faults, elog);
     if(service_cli && svc.active()==false){
       svc.enter(service_pin.empty()?cfg.service.pin_code:service_pin);

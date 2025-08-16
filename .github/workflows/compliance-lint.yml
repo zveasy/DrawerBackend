@@ -1,0 +1,26 @@
+name: Compliance lint
+on:
+  push:
+    paths:
+      - 'docs/compliance/**'
+      - 'scripts/compliance/**'
+      - '.github/workflows/compliance-lint.yml'
+  pull_request:
+    paths:
+      - 'docs/compliance/**'
+      - 'scripts/compliance/**'
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions/setup-python@v4
+        with:
+          python-version: '3.x'
+      - run: python scripts/compliance/validate_prescan_log.py docs/compliance/PreScan_Data_Sheet.csv
+      - run: python scripts/compliance/check_ul94_bom.py docs/compliance/BOM_Compliance_Template.csv
+      - run: |
+          sudo apt-get update && sudo apt-get install -y aspell >/dev/null
+          find docs/compliance -name '*.md' -print0 | xargs -0 -n1 aspell list --mode=markdown | tee /tmp/spell.txt
+          test ! -s /tmp/spell.txt
