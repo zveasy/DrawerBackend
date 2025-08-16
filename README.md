@@ -30,6 +30,7 @@ docker run --rm --device /dev/gpiochip0 register_mvp
 ```
 
 
+
 ## Dev container
 
 Open the folder in [VS Code Dev Containers](https://code.visualstudio.com/docs/remote/containers) or GitHub Codespaces and the Docker image will build automatically. The container maps `/dev/gpiochip0` and runs:
@@ -43,4 +44,5 @@ so the project is ready to run:
 ```
 ./build/register_mvp
 ```
+
 
