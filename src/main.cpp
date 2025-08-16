@@ -1,3 +1,5 @@
+#include "config/config.hpp"
+#include "app/selftest.hpp"
 #include "drivers/hopper_parallel.hpp"
 #include "drivers/stepper.hpp"
 #include "app/shutter_fsm.hpp"
@@ -17,19 +19,10 @@
 #include <memory>
 #include <sstream>
 
-// --- PIN MAP ---
-static constexpr int PIN_STEP = 23;
-static constexpr int PIN_DIR  = 24;
-static constexpr int PIN_EN   = 25;
-static constexpr int PIN_OPEN = 26;
-static constexpr int PIN_CLOSED = 27;
-
-static constexpr int PIN_HOPPER_EN = 5;
-static constexpr int PIN_HOPPER_P  = 6;
-
 int main(int argc, char** argv) {
   bool demo_shutter = false;
   bool use_scale = false;
+  bool do_selftest = false;
   int dispense_n = -1;
   int purchase_cents = -1;
   int deposit_cents = -1;
@@ -47,16 +40,50 @@ int main(int argc, char** argv) {
       purchase_cents = std::stoi(argv[++i]);
     } else if (arg == "--deposit" && i + 1 < argc) {
       deposit_cents = std::stoi(argv[++i]);
+    } else if (arg == "--selftest") {
+      do_selftest = true;
     }
   }
 
   try {
+    cfg::Config cfg = cfg::load();
+
+    if (do_selftest) {
+      auto res = selftest::run(cfg);
+      if (res.ok) {
+        std::cout << "SELFTEST OK" << std::endl;
+        return 0;
+      } else {
+        // extract reasons
+        std::string reasons; auto add_reason=[&](const std::string& comp){
+          auto pos = res.json.find("\""+comp+"\"");
+          if(pos!=std::string::npos){
+            auto okpos = res.json.find("\"ok\":", pos);
+            if(okpos!=std::string::npos && res.json.compare(okpos+5,5,"false")==0){
+              auto rpos = res.json.find("\"reason\":\"", pos);
+              if(rpos!=std::string::npos){
+                auto start=rpos+11; auto end=res.json.find("\"", start);
+                if(end!=std::string::npos){
+                  if(!reasons.empty()) reasons += "; ";
+                  reasons += comp+":"+res.json.substr(start,end-start);
+                }
+              }
+            }
+          }
+        };
+        add_reason("shutter"); add_reason("hopper"); add_reason("scale");
+        std::cout << "SELFTEST FAIL: " << reasons << std::endl;
+        return 1;
+      }
+    }
+
     auto chip = hal::make_chip();
 
     if (demo_shutter) {
-      Stepper step(*chip, PIN_STEP, PIN_DIR, PIN_EN, PIN_OPEN, PIN_CLOSED,
-                   /*steps_per_mm=*/40, /*pulse_us=*/400, /*rpm=*/80);
-      ShutterFSM fsm(step, 5, 80);
+      Stepper step(*chip, cfg.pins.step, cfg.pins.dir, cfg.pins.enable,
+                   cfg.pins.limit_open, cfg.pins.limit_closed,
+                   cfg.mech.steps_per_mm, 400, 80);
+      ShutterFSM fsm(step, 5, cfg.mech.max_mm);
       fsm.cmdHome();
       while (fsm.state() != ShutterState::CLOSED &&
              fsm.state() != ShutterState::FAULT) {
@@ -66,16 +93,25 @@ int main(int argc, char** argv) {
     }
 
     if (purchase_cents >= 0 && deposit_cents >= 0) {
-      Stepper step(*chip, PIN_STEP, PIN_DIR, PIN_EN, PIN_OPEN, PIN_CLOSED,
-                   /*steps_per_mm=*/40, /*pulse_us=*/400, /*rpm=*/80);
-      ShutterFSM fsm(step, 5, 80);
+      Stepper step(*chip, cfg.pins.step, cfg.pins.dir, cfg.pins.enable,
+                   cfg.pins.limit_open, cfg.pins.limit_closed,
+                   cfg.mech.steps_per_mm, 400, 80);
+      ShutterFSM fsm(step, 5, cfg.mech.max_mm);
       ShutterAdapter sh(fsm);
-      HopperParallel hopper(*chip, PIN_HOPPER_EN, PIN_HOPPER_P);
+      HopperParallel hopper(*chip, cfg.pins.hopper_en, cfg.pins.hopper_pulse,
+                            true, cfg.hopper.pulses_per_coin,
+                            cfg.hopper.min_edge_interval_us);
       DispenseConfig dcfg;
+      dcfg.jam_ms = cfg.disp.jam_ms;
+      dcfg.settle_ms = cfg.disp.settle_ms;
+      dcfg.max_ms_per_coin = cfg.disp.max_ms_per_coin;
+      dcfg.hard_timeout_ms = cfg.disp.hard_timeout_ms;
       DispenseController dctrl(hopper, dcfg);
       dctrl.loadCalibration();
       DispenseAdapter disp(dctrl);
       TxnConfig tcfg;
+      tcfg.open_mm = cfg.mech.open_mm;
+      tcfg.present_ms = cfg.pres.present_ms;
       TxnEngine eng(sh, disp, tcfg);
       if (tcfg.resume_on_start) eng.resume_if_needed();
       auto res = eng.run_purchase(purchase_cents, deposit_cents);
@@ -94,18 +130,22 @@ int main(int argc, char** argv) {
     }
 
     if (dispense_n >= 0) {
-      HopperParallel hopper(*chip, PIN_HOPPER_EN, PIN_HOPPER_P);
-      DispenseConfig cfg;
-      DispenseController ctrl(hopper, cfg);
+      HopperParallel hopper(*chip, cfg.pins.hopper_en, cfg.pins.hopper_pulse,
+                            true, cfg.hopper.pulses_per_coin,
+                            cfg.hopper.min_edge_interval_us);
+      DispenseConfig dcfg;
+      dcfg.jam_ms = cfg.disp.jam_ms;
+      dcfg.settle_ms = cfg.disp.settle_ms;
+      dcfg.max_ms_per_coin = cfg.disp.max_ms_per_coin;
+      dcfg.hard_timeout_ms = cfg.disp.hard_timeout_ms;
+      DispenseController ctrl(hopper, dcfg);
       ctrl.loadCalibration();
 
       std::unique_ptr<HX711> hx;
       IScale* scale = nullptr;
       if (use_scale) {
         try {
-          static constexpr int PIN_SCALE_DT = 16;
-          static constexpr int PIN_SCALE_SCK = 17;
-          hx.reset(new HX711(*chip, PIN_SCALE_DT, PIN_SCALE_SCK));
+          hx.reset(new HX711(*chip, cfg.pins.hx_dt, cfg.pins.hx_sck));
           scale = hx.get();
         } catch (const std::exception& e) {
           LOG_WARN("scale_init", {{"err", e.what()}});
@@ -113,6 +153,14 @@ int main(int argc, char** argv) {
         }
       }
       audit::Config acfg;
+      acfg.coin.mass_g = cfg.audit.coin_mass_g;
+      acfg.coin.tol_per_coin_g = cfg.audit.tolerance_per_coin_g;
+      acfg.calib.grams_per_raw = cfg.audit.grams_per_raw;
+      acfg.calib.tare_raw = cfg.audit.tare_raw;
+      acfg.samples_pre = cfg.audit.samples_pre;
+      acfg.samples_post = cfg.audit.samples_post;
+      acfg.settle_ms = cfg.audit.settle_ms;
+      acfg.stuck_epsilon_raw = cfg.audit.stuck_epsilon_raw;
       audit::load_calib("data/scale_calib.txt", acfg.calib);
 
       auto res = ctrl.dispenseCoins(dispense_n);
@@ -178,4 +226,3 @@ int main(int argc, char** argv) {
     return 1;
   }
 }
-
