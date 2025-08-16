@@ -1,11 +1,21 @@
 
 # register_mvp
 
+Sprint 1 & 2 — Repo, HAL, Sim Harness, and Shutter FSM.
+
+The project provides a simple GPIO abstraction with mock and libgpiod backends,
+logging helpers, a deterministic simulation harness, and a basic stepper-based
+shutter controller with homing and soft-limit logic.
+
+
+# register_mvp
+
 Sprint 1 — Repo, HAL, and Sim Harness.
 
 The project provides a simple GPIO abstraction with mock and libgpiod backends,
 logging helpers, and a deterministic simulation harness that exercises the
 components without hardware.
+
 
 ## Build
 
@@ -13,7 +23,11 @@ components without hardware.
 # default (mock HAL)
 cmake -S . -B build -DUSE_MOCK_GPIO=ON
 cmake --build build -j
+
+./build/register_mvp --demo-shutter
+
 ./build/register_mvp_sim --json
+
 
 # enable tests
 ctest --test-dir build --output-on-failure
@@ -23,6 +37,7 @@ sudo apt-get install -y libgpiod-dev
 cmake -S . -B build-gpio -DUSE_MOCK_GPIO=OFF
 cmake --build build-gpio -j
 ```
+
 
 # DrawerBackend
 
@@ -70,5 +85,3 @@ so the project is ready to run:
 ```
 ./build/register_mvp
 ```
-
-

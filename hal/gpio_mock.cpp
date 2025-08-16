@@ -24,8 +24,16 @@ private:
 class MockChip : public Chip {
 public:
   Line* request_line(int gpio, Direction) override {
+
+    auto it = lines_.find(gpio);
+    if (it == lines_.end()) {
+      it = lines_.emplace(gpio, std::make_unique<MockLine>(gpio)).first;
+    }
+    return it->second.get();
+
     lines_[gpio] = std::make_unique<MockLine>(gpio);
     return lines_[gpio].get();
+
   }
 private:
   std::map<int, std::unique_ptr<MockLine>> lines_;

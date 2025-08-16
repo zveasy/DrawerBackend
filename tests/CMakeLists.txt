@@ -30,3 +30,22 @@ endif()
 target_link_libraries(sim_script_test gtest_main)
 
 gtest_discover_tests(sim_script_test)
+
+
+add_executable(shutter_homing_test shutter_homing_test.cpp)
+target_include_directories(shutter_homing_test PRIVATE .. ../src)
+target_compile_features(shutter_homing_test PRIVATE cxx_std_17)
+if (CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+  target_compile_options(shutter_homing_test PRIVATE -Wall -Wextra -Wpedantic -O2 -g)
+endif()
+target_link_libraries(shutter_homing_test gtest_main drivers app hal util)
+gtest_discover_tests(shutter_homing_test)
+
+add_executable(shutter_fault_test shutter_fault_test.cpp)
+target_include_directories(shutter_fault_test PRIVATE .. ../src)
+target_compile_features(shutter_fault_test PRIVATE cxx_std_17)
+if (CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+  target_compile_options(shutter_fault_test PRIVATE -Wall -Wextra -Wpedantic -O2 -g)
+endif()
+target_link_libraries(shutter_fault_test gtest_main drivers app hal util)
+gtest_discover_tests(shutter_fault_test)
