@@ -1,0 +1,12 @@
+{
+  "name": "register_mvp",
+  "build": {
+    "dockerfile": "../Dockerfile",
+    "context": ".."
+  },
+  "runArgs": [
+    "--device=/dev/gpiochip0"
+  ],
+  "postCreateCommand": "cmake -S . -B build -DUSE_MOCK_GPIO=ON && cmake --build build -j",
+  "remoteUser": "root"
+}
