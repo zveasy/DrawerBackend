@@ -4,6 +4,7 @@
 #include <filesystem>
 #include <fstream>
 #include <sstream>
+#include <algorithm>
 
 DiskQueue::DiskQueue(const std::string& dir, uint64_t max_bytes)
     : dir_(dir), max_bytes_(max_bytes) {}
