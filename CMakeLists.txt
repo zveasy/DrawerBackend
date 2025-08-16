@@ -16,6 +16,7 @@ add_library(util
   util/log.cpp
   src/util/persist.cpp
   src/util/journal.cpp
+  src/util/metrics.cpp
 )
 target_include_directories(util PUBLIC . src)
 
@@ -53,13 +54,20 @@ add_library(app
   src/app/shutter_adapter.cpp
   src/app/dispense_adapter.cpp
   src/app/txn_engine.cpp
+  src/app/selftest.cpp
 )
 target_include_directories(app PUBLIC . src)
 target_link_libraries(app PUBLIC drivers hal util)
 
+# config
+add_library(cfg
+  src/config/config.cpp
+)
+target_include_directories(cfg PUBLIC . src)
+
 # main executable
 add_executable(register_mvp src/main.cpp)
-target_link_libraries(register_mvp PRIVATE app drivers hal util)
+target_link_libraries(register_mvp PRIVATE app drivers hal util cfg)
 target_include_directories(register_mvp PRIVATE . src)
 
 enable_testing()

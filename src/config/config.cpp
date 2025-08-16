@@ -1,0 +1,205 @@
+#include "config/config.hpp"
+#include <algorithm>
+#include <cctype>
+#include <cstdlib>
+#include <filesystem>
+#include <fstream>
+#include <sstream>
+
+namespace cfg {
+
+namespace {
+
+Config make_defaults() {
+  Config c;
+  c.pins = {23,24,25,26,27,5,6,19,13};
+  c.mech = {40,40,80};
+  c.hopper = {1,2000};
+  c.disp = {600,120,300,5000};
+  c.audit = {5.670,0.35,0.001,0,8,8,200,3};
+  c.pres = {2000};
+  c.st = {true};
+  return c;
+}
+
+std::string trim(const std::string& s) {
+  size_t start = s.find_first_not_of(" \t\r\n");
+  if (start == std::string::npos) return "";
+  size_t end = s.find_last_not_of(" \t\r\n");
+  return s.substr(start, end - start + 1);
+}
+
+std::string lower(std::string s) {
+  std::transform(s.begin(), s.end(), s.begin(), [](unsigned char c){ return std::tolower(c); });
+  return s;
+}
+
+} // namespace
+
+const Config& defaults() {
+  static Config d = make_defaults();
+  return d;
+}
+
+Config load() {
+  Config cfg = defaults();
+  cfg.source_path.clear();
+  cfg.warnings.clear();
+
+  std::string path;
+  const char* env = std::getenv("REGISTER_MVP_CONFIG");
+  if (env && std::filesystem::exists(env)) {
+    path = env;
+  } else if (std::filesystem::exists("config/config.ini")) {
+    path = "config/config.ini";
+  }
+
+  if (!path.empty()) {
+    cfg.source_path = path;
+    std::ifstream in(path);
+    std::string line, section;
+    int lineno = 0;
+    while (std::getline(in, line)) {
+      lineno++;
+      auto hash = line.find('#');
+      if (hash != std::string::npos) line = line.substr(0, hash);
+      line = trim(line);
+      if (line.empty()) continue;
+      if (line.front() == '[' && line.back() == ']') {
+        section = lower(trim(line.substr(1, line.size()-2)));
+        continue;
+      }
+      auto eq = line.find('=');
+      if (eq == std::string::npos) {
+        cfg.warnings.push_back("line " + std::to_string(lineno) + " invalid");
+        continue;
+      }
+      std::string key = lower(trim(line.substr(0, eq)));
+      std::string value = trim(line.substr(eq+1));
+      auto fullkey = section + "." + key;
+      bool handled = false;
+      try {
+        if (section == "io.pins") {
+          handled = true;
+          int* target = nullptr;
+          if (key == "step") target = &cfg.pins.step;
+          else if (key == "dir") target = &cfg.pins.dir;
+          else if (key == "enable") target = &cfg.pins.enable;
+          else if (key == "limit_open") target = &cfg.pins.limit_open;
+          else if (key == "limit_closed") target = &cfg.pins.limit_closed;
+          else if (key == "hopper_en") target = &cfg.pins.hopper_en;
+          else if (key == "hopper_pulse") target = &cfg.pins.hopper_pulse;
+          else if (key == "hx_dt") target = &cfg.pins.hx_dt;
+          else if (key == "hx_sck") target = &cfg.pins.hx_sck;
+          else handled = false;
+          if (target) {
+            int def = *target;
+            try { *target = std::stoi(value); }
+            catch (...) { *target = def; cfg.warnings.push_back(fullkey + " invalid, using default " + std::to_string(def)); }
+          }
+        } else if (section == "mechanics") {
+          handled = true;
+          int* target = nullptr;
+          if (key == "steps_per_mm") target = &cfg.mech.steps_per_mm;
+          else if (key == "open_mm") target = &cfg.mech.open_mm;
+          else if (key == "max_mm") target = &cfg.mech.max_mm;
+          else handled = false;
+          if (target) {
+            int def = *target;
+            try { *target = std::stoi(value); }
+            catch (...) { *target = def; cfg.warnings.push_back(fullkey + " invalid, using default " + std::to_string(def)); }
+          }
+        } else if (section == "hopper") {
+          handled = true;
+          int* target = nullptr;
+          if (key == "pulses_per_coin") target = &cfg.hopper.pulses_per_coin;
+          else if (key == "min_edge_interval_us") target = &cfg.hopper.min_edge_interval_us;
+          else handled = false;
+          if (target) {
+            int def = *target;
+            try { *target = std::stoi(value); }
+            catch (...) { *target = def; cfg.warnings.push_back(fullkey + " invalid, using default " + std::to_string(def)); }
+          }
+        } else if (section == "dispense") {
+          handled = true;
+          int* target = nullptr;
+          if (key == "jam_ms") target = &cfg.disp.jam_ms;
+          else if (key == "settle_ms") target = &cfg.disp.settle_ms;
+          else if (key == "max_ms_per_coin") target = &cfg.disp.max_ms_per_coin;
+          else if (key == "hard_timeout_ms") target = &cfg.disp.hard_timeout_ms;
+          else handled = false;
+          if (target) {
+            int def = *target;
+            try { *target = std::stoi(value); }
+            catch (...) { *target = def; cfg.warnings.push_back(fullkey + " invalid, using default " + std::to_string(def)); }
+          }
+        } else if (section == "audit") {
+          handled = true;
+          if (key == "coin_mass_g") {
+            double def = cfg.audit.coin_mass_g;
+            try { cfg.audit.coin_mass_g = std::stod(value); }
+            catch (...) { cfg.audit.coin_mass_g = def; cfg.warnings.push_back(fullkey + " invalid, using default " + std::to_string(def)); }
+          } else if (key == "tolerance_per_coin_g") {
+            double def = cfg.audit.tolerance_per_coin_g;
+            try { cfg.audit.tolerance_per_coin_g = std::stod(value); }
+            catch (...) { cfg.audit.tolerance_per_coin_g = def; cfg.warnings.push_back(fullkey + " invalid, using default " + std::to_string(def)); }
+          } else if (key == "grams_per_raw") {
+            double def = cfg.audit.grams_per_raw;
+            try { cfg.audit.grams_per_raw = std::stod(value); }
+            catch (...) { cfg.audit.grams_per_raw = def; cfg.warnings.push_back(fullkey + " invalid, using default " + std::to_string(def)); }
+          } else if (key == "tare_raw") {
+            long def = cfg.audit.tare_raw;
+            try { cfg.audit.tare_raw = std::stol(value); }
+            catch (...) { cfg.audit.tare_raw = def; cfg.warnings.push_back(fullkey + " invalid, using default " + std::to_string(def)); }
+          } else if (key == "samples_pre") {
+            int def = cfg.audit.samples_pre;
+            try { cfg.audit.samples_pre = std::stoi(value); }
+            catch (...) { cfg.audit.samples_pre = def; cfg.warnings.push_back(fullkey + " invalid, using default " + std::to_string(def)); }
+          } else if (key == "samples_post") {
+            int def = cfg.audit.samples_post;
+            try { cfg.audit.samples_post = std::stoi(value); }
+            catch (...) { cfg.audit.samples_post = def; cfg.warnings.push_back(fullkey + " invalid, using default " + std::to_string(def)); }
+          } else if (key == "settle_ms") {
+            int def = cfg.audit.settle_ms;
+            try { cfg.audit.settle_ms = std::stoi(value); }
+            catch (...) { cfg.audit.settle_ms = def; cfg.warnings.push_back(fullkey + " invalid, using default " + std::to_string(def)); }
+          } else if (key == "stuck_epsilon_raw") {
+            int def = cfg.audit.stuck_epsilon_raw;
+            try { cfg.audit.stuck_epsilon_raw = std::stoi(value); }
+            catch (...) { cfg.audit.stuck_epsilon_raw = def; cfg.warnings.push_back(fullkey + " invalid, using default " + std::to_string(def)); }
+          } else {
+            handled = false;
+          }
+        } else if (section == "presentation") {
+          handled = true;
+          if (key == "present_ms") {
+            int def = cfg.pres.present_ms;
+            try { cfg.pres.present_ms = std::stoi(value); }
+            catch (...) { cfg.pres.present_ms = def; cfg.warnings.push_back(fullkey + " invalid, using default " + std::to_string(def)); }
+          } else {
+            handled = false;
+          }
+        } else if (section == "selftest") {
+          handled = true;
+          if (key == "enable_coin_test") {
+            bool def = cfg.st.enable_coin_test;
+            try { cfg.st.enable_coin_test = std::stoi(value) != 0; }
+            catch (...) { cfg.st.enable_coin_test = def; cfg.warnings.push_back(fullkey + " invalid, using default " + (def?"1":"0")); }
+          } else {
+            handled = false;
+          }
+        }
+      } catch (...) {
+        // Should not reach, but guard anyway
+        cfg.warnings.push_back(fullkey + " invalid, using default");
+      }
+      if (!handled) {
+        cfg.warnings.push_back(fullkey + " unknown, ignoring");
+      }
+    }
+  }
+
+  return cfg;
+}
+
+} // namespace cfg
