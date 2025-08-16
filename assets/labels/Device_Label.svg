@@ -1,4 +1,8 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="100" height="50">
-  <rect width="100" height="50" fill="#fff" stroke="#000"/>
-  <text x="10" y="25" font-size="10">MODEL XXX</text>
+<svg xmlns="http://www.w3.org/2000/svg" width="200" height="100">
+  <text x="10" y="20">Serial: {{SERIAL}}</text>
+  <text x="10" y="40">Device: {{DEVICE_ID}}</text>
+  <text x="10" y="60">Date: {{DATE}}</text>
+  <text x="10" y="80">{{COMPANY}}</text>
+  <!-- QR placeholder -->
+  <rect x="150" y="10" width="40" height="40" fill="#ccc"/>
 </svg>

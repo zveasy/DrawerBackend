@@ -121,10 +121,11 @@ target_link_libraries(app PUBLIC drivers hal util safety)
 add_library(server
   src/server/http_server.cpp
   src/server/version_endpoint.cpp
+  src/server/eol_endpoint.cpp
   src/ui/tui.cpp
 )
 target_include_directories(server PUBLIC . src)
-target_link_libraries(server PUBLIC app httplib::httplib pthread obs)
+target_link_libraries(server PUBLIC app httplib::httplib pthread obs mfg)
 
 # ota
 add_library(ota
@@ -168,6 +169,16 @@ if(USE_NLOHMANN_JSON)
   target_compile_definitions(cloud PUBLIC USE_NLOHMANN_JSON=1)
 endif()
 
+# manufacturing helpers
+add_library(mfg
+  src/eol/eol_spec.cpp
+  src/eol/eol_runner.cpp
+  src/provision/serial.cpp
+  src/burnin/burnin.cpp
+)
+target_include_directories(mfg PUBLIC . src)
+target_link_libraries(mfg PUBLIC app drivers util cfg cloud)
+
 # main executable
 add_executable(register_mvp src/main.cpp)
 target_link_libraries(register_mvp PRIVATE app drivers hal util cfg server cloud safety pos obs compliance)
@@ -206,6 +217,9 @@ install(PROGRAMS scripts/audit/security_audit.sh DESTINATION /opt/register_mvp/p
 install(DIRECTORY docs/ DESTINATION /opt/register_mvp/share PATTERN "compliance" EXCLUDE)
 install(DIRECTORY docs/compliance/ DESTINATION /opt/register_mvp/share/compliance)
 install(DIRECTORY scripts/compliance/ DESTINATION /opt/register_mvp/bin/compliance FILE_PERMISSIONS OWNER_EXECUTE OWNER_WRITE OWNER_READ GROUP_READ GROUP_EXECUTE WORLD_READ WORLD_EXECUTE)
+install(DIRECTORY docs/wi docs/dfm_dfa docs/eol DESTINATION /opt/register_mvp/share/mfg)
+install(PROGRAMS scripts/provision/provision_unit.sh scripts/provision/print_label.py scripts/eol/run_eol.py scripts/eol/collect_reports.py DESTINATION /opt/register_mvp/bin/mfg)
+install(FILES packaging/systemd/register-mvp-eol.service packaging/systemd/register-mvp-eol.path DESTINATION /lib/systemd/system)
 
 # CPack metadata
 set(CPACK_GENERATOR "DEB")

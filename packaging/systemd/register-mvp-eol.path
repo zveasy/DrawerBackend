@@ -1,0 +1,9 @@
+[Unit]
+Description=Trigger EOL after provisioning
+
+[Path]
+PathExists=/var/lib/register-mvp/provisioned
+Unit=register-mvp-eol.service
+
+[Install]
+WantedBy=multi-user.target
