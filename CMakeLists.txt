@@ -92,6 +92,13 @@ add_library(safety
 target_include_directories(safety PUBLIC . src)
 target_link_libraries(safety PUBLIC hal util)
 
+# compliance
+add_library(compliance
+  src/compliance/compliance_mode.cpp
+)
+target_include_directories(compliance PUBLIC . src)
+target_link_libraries(compliance PUBLIC util safety)
+
 # app
 add_library(app
   src/app/shutter_fsm.cpp
@@ -163,7 +170,7 @@ endif()
 
 # main executable
 add_executable(register_mvp src/main.cpp)
-target_link_libraries(register_mvp PRIVATE app drivers hal util cfg server cloud safety pos obs)
+target_link_libraries(register_mvp PRIVATE app drivers hal util cfg server cloud safety pos obs compliance)
 target_include_directories(register_mvp PRIVATE . src)
 
 if(BUILD_TESTING)
@@ -196,7 +203,9 @@ install(PROGRAMS scripts/hardening/apply_hardening.sh DESTINATION /opt/register_
 install(PROGRAMS scripts/hardening/ro_root_overlay.sh DESTINATION /opt/register_mvp/packaging)
 install(PROGRAMS scripts/audit/security_audit.sh DESTINATION /opt/register_mvp/packaging)
 
-install(DIRECTORY docs/ DESTINATION /opt/register_mvp/share)
+install(DIRECTORY docs/ DESTINATION /opt/register_mvp/share PATTERN "compliance" EXCLUDE)
+install(DIRECTORY docs/compliance/ DESTINATION /opt/register_mvp/share/compliance)
+install(DIRECTORY scripts/compliance/ DESTINATION /opt/register_mvp/bin/compliance FILE_PERMISSIONS OWNER_EXECUTE OWNER_WRITE OWNER_READ GROUP_READ GROUP_EXECUTE WORLD_READ WORLD_EXECUTE)
 
 # CPack metadata
 set(CPACK_GENERATOR "DEB")
