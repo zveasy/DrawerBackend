@@ -1,0 +1,19 @@
+[Unit]
+Description=Register MVP Service
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=root
+Group=root
+WorkingDirectory=/opt/register_mvp
+ExecStart=/opt/register_mvp/bin/register_mvp --pos-http
+Restart=on-failure
+RestartSec=2
+Environment=REGISTER_MVP_CONFIG=/etc/register-mvp/config.ini
+StandardOutput=append:/var/log/register-mvp/app.log
+StandardError=append:/var/log/register-mvp/app.err
+
+[Install]
+WantedBy=multi-user.target

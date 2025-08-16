@@ -8,6 +8,7 @@ set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 option(USE_MOCK_GPIO "Build with a mock GPIO HAL (no libgpiod)" ON)
 option(USE_AWS_SDK "Build with AWS IoT CRT MQTT client" OFF)
 option(USE_NLOHMANN_JSON "Use nlohmann/json single header" ON)
+option(ENABLE_SERIAL_POS "Build serial POS connector stub" OFF)
 
 if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
   add_compile_options(-Wall -Wextra -Wpedantic -O2 -g)
@@ -53,6 +54,7 @@ else()
   find_gpiod()
   target_sources(hal PRIVATE hal/gpio_gpiod.cpp)
   target_compile_definitions(hal PUBLIC USE_LIBGPIOD=1)
+  target_link_libraries(hal PRIVATE ${GPIOD_LIBRARIES})
 endif()
 
 # drivers
@@ -97,6 +99,17 @@ add_library(server
 target_include_directories(server PUBLIC . src)
 target_link_libraries(server PUBLIC app httplib::httplib pthread)
 
+# pos connectors
+add_library(pos
+  src/pos/http_pos.cpp
+)
+target_include_directories(pos PUBLIC . src)
+target_link_libraries(pos PUBLIC app httplib::httplib pthread)
+if(ENABLE_SERIAL_POS)
+  target_sources(pos PRIVATE src/pos/serial_pos.cpp)
+  target_compile_definitions(pos PRIVATE ENABLE_SERIAL_POS)
+endif()
+
 # config
 add_library(cfg
   src/config/config.cpp
@@ -118,9 +131,36 @@ endif()
 
 # main executable
 add_executable(register_mvp src/main.cpp)
-target_link_libraries(register_mvp PRIVATE app drivers hal util cfg server cloud safety)
+target_link_libraries(register_mvp PRIVATE app drivers hal util cfg server cloud safety pos)
 target_include_directories(register_mvp PRIVATE . src)
 
-enable_testing()
-add_subdirectory(tests)
+if(BUILD_TESTING)
+  enable_testing()
+  add_subdirectory(tests)
+endif()
 
+include(GNUInstallDirs)
+
+# Binaries
+install(TARGETS register_mvp RUNTIME DESTINATION /opt/register_mvp/bin)
+
+# Example config
+install(FILES config/config.example.ini DESTINATION /opt/register_mvp/share RENAME config.ini.example)
+
+# Systemd + logrotate
+install(FILES packaging/systemd/register-mvp.service DESTINATION /lib/systemd/system)
+install(FILES packaging/logrotate/register-mvp DESTINATION /etc/logrotate.d)
+
+# Postinst/prerm
+install(PROGRAMS scripts/postinst.sh DESTINATION /opt/register_mvp/packaging)
+install(PROGRAMS scripts/prerm.sh   DESTINATION /opt/register_mvp/packaging)
+
+# CPack metadata
+set(CPACK_GENERATOR "DEB")
+set(CPACK_PACKAGE_NAME "register-mvp")
+set(CPACK_PACKAGE_VENDOR "YourCompany")
+set(CPACK_PACKAGE_CONTACT "ops@yourcompany.com")
+set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "Register MVP with POS connector and local API")
+set(CPACK_DEBIAN_PACKAGE_MAINTAINER "YourCompany")
+set(CPACK_PACKAGE_VERSION "1.0.0")
+include(CPack)

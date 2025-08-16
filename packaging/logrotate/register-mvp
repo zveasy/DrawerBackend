@@ -1,0 +1,9 @@
+/var/log/register-mvp/*.log /var/log/register-mvp/*.err {
+  daily
+  rotate 7
+  size 1M
+  compress
+  missingok
+  notifempty
+  copytruncate
+}

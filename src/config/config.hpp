@@ -44,6 +44,12 @@ struct Service {
   std::string audit_path{"data/service.log"};
 };
 
+struct Pos {
+  bool enable_http{true};
+  int port{9090};
+  std::string key;
+};
+
 struct Config {
   Pins pins{};
   Mechanics mech{};
@@ -55,6 +61,7 @@ struct Config {
   Aws aws{};
   Safety safety{};
   Service service{};
+  Pos pos{};
   std::string source_path; // loaded from
   std::vector<std::string> warnings; // invalid keys/values
 };
