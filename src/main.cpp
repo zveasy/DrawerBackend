@@ -8,6 +8,10 @@
 #include "app/shutter_adapter.hpp"
 #include "app/dispense_adapter.hpp"
 #include "app/audit.hpp"
+#include "app/multi_dispenser.hpp"
+#include "app/change_maker.hpp"
+#include "app/inventory.hpp"
+#include "app/denom.hpp"
 #include "drivers/hx711.hpp"
 #include "util/log.hpp"
 #include "util/journal.hpp"
@@ -166,43 +170,48 @@ int main(int argc, char** argv) {
       return 0;
     }
 
-    if (purchase_cents >= 0 && deposit_cents >= 0) {
-      Stepper step(*chip, cfg.pins.step, cfg.pins.dir, cfg.pins.enable,
-                   cfg.pins.limit_open, cfg.pins.limit_closed,
-                   cfg.mech.steps_per_mm, 400, 80);
-      ShutterFSM fsm(step, 5, cfg.mech.max_mm);
-      ShutterAdapter sh(fsm);
-      HopperParallel hopper(*chip, cfg.pins.hopper_en, cfg.pins.hopper_pulse,
-                            true, cfg.hopper.pulses_per_coin,
-                            cfg.hopper.min_edge_interval_us);
-      DispenseConfig dcfg;
-      dcfg.jam_ms = cfg.disp.jam_ms;
-      dcfg.settle_ms = cfg.disp.settle_ms;
-      dcfg.max_ms_per_coin = cfg.disp.max_ms_per_coin;
-      dcfg.hard_timeout_ms = cfg.disp.hard_timeout_ms;
-      DispenseController dctrl(hopper, dcfg);
-      dctrl.loadCalibration();
-      DispenseAdapter disp(dctrl);
-      TxnConfig tcfg;
-      tcfg.open_mm = cfg.mech.open_mm;
-      tcfg.present_ms = cfg.pres.present_ms;
-      TxnEngine eng(sh, disp, tcfg);
-      if (tcfg.resume_on_start) eng.resume_if_needed();
-      auto res = eng.run_purchase(purchase_cents, deposit_cents);
-      if (iot) iot->publish_txn(res);
-      bool json = std::getenv("LOG_JSON") && std::string(std::getenv("LOG_JSON")) == "1";
-      if (json) {
-        std::cout << journal::to_json(res) << std::endl;
-      } else {
-        if (res.phase == "DONE") {
-          std::cout << "OK quarters=" << res.quarters
-                    << " open=" << tcfg.present_ms << "ms" << std::endl;
-        } else {
-          std::cout << "VOID reason=" << res.reason << std::endl;
+      if (purchase_cents >= 0 && deposit_cents >= 0) {
+        Inventory inv;
+        for (const auto& spec : default_us_specs()) {
+          HopperStock hs; hs.spec = spec; hs.logical_count = 100;
+          inv.upsert(hs);
         }
+        struct LocalDisp : IDispenser {
+          DispenseStats dispenseCoins(int coins) override {
+            return DispenseStats{true, coins, coins, coins, 0, "", 0};
+          }
+        };
+        std::vector<std::unique_ptr<LocalDisp>> holders;
+        MultiDispenser multi(inv);
+        for (const auto& spec : default_us_specs()) {
+          holders.emplace_back(new LocalDisp());
+          multi.attach(HopperHandle{spec, holders.back().get()});
+        }
+        ChangeMaker cm(inv);
+        int change = deposit_cents - purchase_cents;
+        if (change < 0) change = 0;
+        change %= 100;
+        int leftover = 0;
+        auto plan = cm.make_plan_cents(change, leftover);
+        if (leftover > 0) {
+          std::cout << "VOID reason=NOCHANGE" << std::endl;
+          return 1;
+        }
+        auto st = multi.execute(plan);
+        if (!st.ok) {
+          std::cout << "VOID reason=" << st.reason << std::endl;
+          return 1;
+        }
+        int q=0,d=0,n=0,p=0;
+        for(const auto& pi : plan){
+          if(pi.denom==Denom::QUARTER) q=pi.count;
+          else if(pi.denom==Denom::DIME) d=pi.count;
+          else if(pi.denom==Denom::NICKEL) n=pi.count;
+          else if(pi.denom==Denom::PENNY) p=pi.count;
+        }
+        std::cout << "OK quarters="<<q<<" dimes="<<d<<" nickels="<<n<<" pennies="<<p<< std::endl;
+        return 0;
       }
-      return res.phase == "DONE" ? 0 : 1;
-    }
 
     if (dispense_n >= 0) {
       HopperParallel hopper(*chip, cfg.pins.hopper_en, cfg.pins.hopper_pulse,
