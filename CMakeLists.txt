@@ -11,6 +11,13 @@ if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
   add_compile_options(-Wall -Wextra -Wpedantic -O2 -g)
 endif()
 
+include(FetchContent)
+FetchContent_Declare(cpphttplib
+  GIT_REPOSITORY https://github.com/yhirose/cpp-httplib.git
+  GIT_TAG v0.15.3)
+FetchContent_MakeAvailable(cpphttplib)
+add_library(httplib::httplib ALIAS httplib)
+
 # util
 add_library(util
   util/log.cpp
@@ -59,6 +66,14 @@ add_library(app
 target_include_directories(app PUBLIC . src)
 target_link_libraries(app PUBLIC drivers hal util)
 
+# server / api
+add_library(server
+  src/server/http_server.cpp
+  src/ui/tui.cpp
+)
+target_include_directories(server PUBLIC . src)
+target_link_libraries(server PUBLIC app httplib::httplib pthread)
+
 # config
 add_library(cfg
   src/config/config.cpp
@@ -67,7 +82,7 @@ target_include_directories(cfg PUBLIC . src)
 
 # main executable
 add_executable(register_mvp src/main.cpp)
-target_link_libraries(register_mvp PRIVATE app drivers hal util cfg)
+target_link_libraries(register_mvp PRIVATE app drivers hal util cfg server)
 target_include_directories(register_mvp PRIVATE . src)
 
 enable_testing()
