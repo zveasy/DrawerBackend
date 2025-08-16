@@ -11,6 +11,8 @@
 #include "drivers/hx711.hpp"
 #include "util/log.hpp"
 #include "util/journal.hpp"
+#include "server/http_server.hpp"
+#include "ui/tui.hpp"
 
 #include <cstdlib>
 #include <iostream>
@@ -18,6 +20,7 @@
 #include <map>
 #include <memory>
 #include <sstream>
+#include <thread>
 
 int main(int argc, char** argv) {
   bool demo_shutter = false;
@@ -26,6 +29,9 @@ int main(int argc, char** argv) {
   int dispense_n = -1;
   int purchase_cents = -1;
   int deposit_cents = -1;
+  bool run_api = false;
+  bool run_tui = false;
+  int api_port = 8080;
   for (int i = 1; i < argc; ++i) {
     std::string arg(argv[i]);
     if (arg == "--json") {
@@ -42,6 +48,12 @@ int main(int argc, char** argv) {
       deposit_cents = std::stoi(argv[++i]);
     } else if (arg == "--selftest") {
       do_selftest = true;
+    } else if (arg == "--api") {
+      run_api = true;
+      if (i + 1 < argc && argv[i+1][0] != '-') api_port = std::stoi(argv[++i]);
+    } else if (arg == "--tui") {
+      run_api = true; run_tui = true;
+      if (i + 1 < argc && argv[i+1][0] != '-') api_port = std::stoi(argv[++i]);
     }
   }
 
@@ -90,6 +102,40 @@ int main(int argc, char** argv) {
         fsm.tick();
       }
       return fsm.state() == ShutterState::CLOSED ? 0 : 1;
+    }
+
+    if (run_api) {
+      Stepper step(*chip, cfg.pins.step, cfg.pins.dir, cfg.pins.enable,
+                   cfg.pins.limit_open, cfg.pins.limit_closed,
+                   cfg.mech.steps_per_mm, 400, 80);
+      ShutterFSM fsm(step, 5, cfg.mech.max_mm);
+      ShutterAdapter sh(fsm);
+      HopperParallel hopper(*chip, cfg.pins.hopper_en, cfg.pins.hopper_pulse,
+                            true, cfg.hopper.pulses_per_coin,
+                            cfg.hopper.min_edge_interval_us);
+      DispenseConfig dcfg;
+      dcfg.jam_ms = cfg.disp.jam_ms;
+      dcfg.settle_ms = cfg.disp.settle_ms;
+      dcfg.max_ms_per_coin = cfg.disp.max_ms_per_coin;
+      dcfg.hard_timeout_ms = cfg.disp.hard_timeout_ms;
+      DispenseController dctrl(hopper, dcfg);
+      dctrl.loadCalibration();
+      DispenseAdapter disp(dctrl);
+      TxnConfig tcfg;
+      tcfg.open_mm = cfg.mech.open_mm;
+      tcfg.present_ms = cfg.pres.present_ms;
+      TxnEngine eng(sh, disp, tcfg);
+      if (tcfg.resume_on_start) eng.resume_if_needed();
+      HttpServer srv(eng, sh, disp);
+      if (!srv.start("127.0.0.1", api_port)) return 1;
+      std::cout << "API listening on 127.0.0.1:" << srv.port() << std::endl;
+      if (run_tui) {
+        tui::run(srv.port());
+        srv.stop();
+        return 0;
+      }
+      while (true) std::this_thread::sleep_for(std::chrono::seconds(60));
+      return 0;
     }
 
     if (purchase_cents >= 0 && deposit_cents >= 0) {
