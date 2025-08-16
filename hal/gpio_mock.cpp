@@ -5,44 +5,54 @@
 
 namespace hal {
 
+namespace {
+// Storage for all mock GPIO line states. Both outputs written by the code
+// under test and inputs driven by tests live here.
+std::map<int, bool> g_values;
+}
+
 class MockLine : public Line {
 public:
   explicit MockLine(int id) : id_(id) {}
   void write(bool v) override {
-    val_ = v;
+    g_values[id_] = v;
     LOG_DEBUG("write", {{"line", std::to_string(id_)}, {"val", v ? "1" : "0"}});
   }
   bool read() override {
-    LOG_DEBUG("read", {{"line", std::to_string(id_)}, {"val", val_ ? "1" : "0"}});
-    return val_;
+    bool v = g_values[id_];
+    LOG_DEBUG("read", {{"line", std::to_string(id_)}, {"val", v ? "1" : "0"}});
+    return v;
   }
 private:
   int id_;
-  bool val_{false};
 };
 
 class MockChip : public Chip {
 public:
   Line* request_line(int gpio, Direction) override {
-
     auto it = lines_.find(gpio);
     if (it == lines_.end()) {
       it = lines_.emplace(gpio, std::make_unique<MockLine>(gpio)).first;
+      g_values[gpio] = false;
     }
     return it->second.get();
-
-    lines_[gpio] = std::make_unique<MockLine>(gpio);
-    return lines_[gpio].get();
-
   }
 private:
   std::map<int, std::unique_ptr<MockLine>> lines_;
 };
 
-std::unique_ptr<Chip> make_mock_chip() { return std::unique_ptr<Chip>(new MockChip()); }
+std::unique_ptr<Chip> make_mock_chip() {
+  return std::unique_ptr<Chip>(new MockChip());
+}
 
 #ifdef USE_MOCK_GPIO
 std::unique_ptr<Chip> make_chip(const std::string&) { return make_mock_chip(); }
 #endif
 
+namespace mock {
+void set_input(int gpio, bool value) { g_values[gpio] = value; }
+bool get_output(int gpio) { return g_values[gpio]; }
+} // namespace mock
+
 } // namespace hal
+
