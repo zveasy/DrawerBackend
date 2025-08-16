@@ -26,6 +26,24 @@ struct Aws {
   uint64_t max_queue_bytes{8ull<<20};
 };
 
+struct Safety {
+  int estop_pin{-1};
+  int lid_tamper_pin{-1};
+  int overcurrent_pin{-1};
+  bool active_high{true};
+  int debounce_ms{10};
+};
+
+struct Service {
+  bool enable{true};
+  std::string pin_code{"1234"};
+  int jam_clear_shutter_mm{3};
+  int jam_clear_cycles{3};
+  int hopper_nudge_ms{150};
+  int hopper_max_retries{2};
+  std::string audit_path{"data/service.log"};
+};
+
 struct Config {
   Pins pins{};
   Mechanics mech{};
@@ -35,6 +53,8 @@ struct Config {
   Presentation pres{};
   SelfTest st{};
   Aws aws{};
+  Safety safety{};
+  Service service{};
   std::string source_path; // loaded from
   std::vector<std::string> warnings; // invalid keys/values
 };

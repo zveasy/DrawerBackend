@@ -1,10 +1,12 @@
 #include "txn_engine.hpp"
+#include "safety/faults.hpp"
 #include <algorithm>
 #include <chrono>
 #include <thread>
 
-TxnEngine::TxnEngine(IShutter& shutter, IDispenser& dispenser, const TxnConfig& cfg)
-    : sh_(shutter), disp_(dispenser), cfg_(cfg) {}
+TxnEngine::TxnEngine(IShutter& shutter, IDispenser& dispenser, const TxnConfig& cfg,
+                     safety::FaultManager* fm)
+    : sh_(shutter), disp_(dispenser), cfg_(cfg), fm_(fm) {}
 
 static std::string make_id() {
   auto now = std::chrono::system_clock::now().time_since_epoch();
@@ -15,6 +17,9 @@ static std::string make_id() {
 journal::Txn TxnEngine::continue_txn(journal::Txn t) {
   int remaining = t.quarters - t.dispensed;
   if (remaining > 0) {
+    if (fm_ && !fm_->check_and_block_motion()) {
+      t.phase = "VOID"; t.reason = "FAULT"; journal::append(t); return t;
+    }
     auto st = disp_.dispenseCoins(remaining);
     t.dispensed += st.dispensed;
     t.phase = "DISPENSING";
@@ -27,6 +32,9 @@ journal::Txn TxnEngine::continue_txn(journal::Txn t) {
       return t;
     }
   }
+  if (fm_ && !fm_->check_and_block_motion()) {
+    t.phase = "VOID"; t.reason = "FAULT"; journal::append(t); return t;
+  }
   if (!sh_.open_mm(cfg_.open_mm, &t.reason)) {
     t.phase = "VOID";
     journal::append(t);
@@ -35,6 +43,9 @@ journal::Txn TxnEngine::continue_txn(journal::Txn t) {
   t.phase = "PRESENTING";
   journal::append(t);
   std::this_thread::sleep_for(std::chrono::milliseconds(cfg_.present_ms));
+  if (fm_ && !fm_->check_and_block_motion()) {
+    t.phase = "VOID"; t.reason = "FAULT"; journal::append(t); return t;
+  }
   if (!sh_.close_mm(cfg_.open_mm, &t.reason)) {
     t.phase = "VOID";
     journal::append(t);
