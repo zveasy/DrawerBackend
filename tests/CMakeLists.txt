@@ -31,6 +31,7 @@ target_link_libraries(sim_script_test gtest_main)
 
 gtest_discover_tests(sim_script_test)
 
+
 add_executable(shutter_homing_test shutter_homing_test.cpp)
 target_include_directories(shutter_homing_test PRIVATE .. ../src)
 target_compile_features(shutter_homing_test PRIVATE cxx_std_17)
