@@ -15,6 +15,12 @@ if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
   add_compile_options(-Wall -Wextra -Wpedantic -O2 -g)
 endif()
 
+find_package(OpenSSL REQUIRED)
+
+set(APP_VERSION "1.0.0")
+execute_process(COMMAND git rev-parse --short HEAD OUTPUT_VARIABLE GIT_SHA OUTPUT_STRIP_TRAILING_WHITESPACE)
+add_compile_definitions(APP_VERSION="${APP_VERSION}" GIT_COMMIT="${GIT_SHA}")
+
 include(FetchContent)
 FetchContent_Declare(cpphttplib
   GIT_REPOSITORY https://github.com/yhirose/cpp-httplib.git
@@ -37,8 +43,11 @@ add_library(util
   src/util/metrics.cpp
   src/util/fs.cpp
   src/util/event_log.cpp
+  src/util/version.cpp
+  src/util/ed25519_verify.cpp
 )
 target_include_directories(util PUBLIC . src)
+target_link_libraries(util PUBLIC OpenSSL::Crypto)
 
 # observability
 add_library(obs
@@ -104,10 +113,21 @@ target_link_libraries(app PUBLIC drivers hal util safety)
 # server / api
 add_library(server
   src/server/http_server.cpp
+  src/server/version_endpoint.cpp
   src/ui/tui.cpp
 )
 target_include_directories(server PUBLIC . src)
 target_link_libraries(server PUBLIC app httplib::httplib pthread obs)
+
+# ota
+add_library(ota
+  src/ota/backend_local.cpp
+  src/ota/backend_rauc.cpp
+  src/ota/agent.cpp
+  src/ota/healthd.cpp
+)
+target_include_directories(ota PUBLIC . src)
+target_link_libraries(ota PUBLIC util cfg httplib::httplib)
 
 # pos connectors
 add_library(pos

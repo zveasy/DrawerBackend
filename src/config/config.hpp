@@ -52,6 +52,19 @@ struct Pos {
   std::string key;
 };
 
+struct Ota {
+  bool enable{false};
+  std::string backend{"local"};
+  std::string feed_url{""};
+  std::string channel{"stable"};
+  std::string ring{"default"};
+  int poll_seconds{300};
+  std::string state_dir{"/var/lib/register-mvp/ota"};
+  std::string key_pub{""};
+  int health_grace_seconds{180};
+  bool require_signed{1};
+};
+
 struct Security {
   bool enable_ro_root{0};
   bool ssh_keys_only{1};
@@ -83,6 +96,7 @@ struct Config {
   Safety safety{};
   Service service{};
   Pos pos{};
+  Ota ota{};
   std::string source_path; // loaded from
   std::vector<std::string> warnings; // invalid keys/values
 };
