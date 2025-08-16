@@ -29,6 +29,7 @@ Config make_defaults() {
   c.safety = {-1,-1,-1,true,10};
   c.service = {true,"1234",3,3,150,2,"data/service.log"};
   c.pos = {true,9090,""};
+  c.ota = {false, "local", "", "stable", "default", 300, "/var/lib/register-mvp/ota", "", 180, true};
   return c;
 }
 
@@ -340,6 +341,39 @@ Config load() {
             catch (...) { cfg.pos.port = def; cfg.warnings.push_back(fullkey + " invalid, using default " + std::to_string(def)); }
           } else if (key == "key") {
             cfg.pos.key = value;
+          } else {
+            handled = false;
+          }
+        } else if (section == "ota") {
+          handled = true;
+          if (key == "enable") {
+            bool def = cfg.ota.enable;
+            try { cfg.ota.enable = std::stoi(value) != 0; }
+            catch (...) { cfg.ota.enable = def; cfg.warnings.push_back(fullkey + " invalid, using default " + (def?"1":"0")); }
+          } else if (key == "backend") {
+            cfg.ota.backend = value;
+          } else if (key == "feed_url") {
+            cfg.ota.feed_url = value;
+          } else if (key == "channel") {
+            cfg.ota.channel = value;
+          } else if (key == "ring") {
+            cfg.ota.ring = value;
+          } else if (key == "poll_seconds") {
+            int def = cfg.ota.poll_seconds;
+            try { cfg.ota.poll_seconds = std::stoi(value); }
+            catch (...) { cfg.ota.poll_seconds = def; cfg.warnings.push_back(fullkey + " invalid, using default " + std::to_string(def)); }
+          } else if (key == "state_dir") {
+            cfg.ota.state_dir = value;
+          } else if (key == "key_pub") {
+            cfg.ota.key_pub = value;
+          } else if (key == "health_grace_seconds") {
+            int def = cfg.ota.health_grace_seconds;
+            try { cfg.ota.health_grace_seconds = std::stoi(value); }
+            catch (...) { cfg.ota.health_grace_seconds = def; cfg.warnings.push_back(fullkey + " invalid, using default " + std::to_string(def)); }
+          } else if (key == "require_signed") {
+            bool def = cfg.ota.require_signed;
+            try { cfg.ota.require_signed = std::stoi(value) != 0; }
+            catch (...) { cfg.ota.require_signed = def; cfg.warnings.push_back(fullkey + " invalid, using default " + (def?"1":"0")); }
           } else {
             handled = false;
           }
