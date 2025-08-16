@@ -3,6 +3,7 @@
 #include <sstream>
 #include <iomanip>
 #include <functional>
+#include <cstdlib>
 
 namespace cloud {
 namespace {
@@ -22,6 +23,8 @@ std::string device_id(const cfg::Config& c) {
   } else {
     const char* cpu = std::getenv("RMVP_CPU_SERIAL");
     if (cpu) raw += cpu;
+    const char* macs = std::getenv("RMVP_MACS");
+    if (macs) raw += macs;
     const char* mid = std::getenv("RMVP_MACHINE_ID");
     if (mid) raw += mid;
     else {
