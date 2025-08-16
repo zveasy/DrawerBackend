@@ -131,6 +131,8 @@ add_library(cloud
   src/cloud/iot_client.cpp
   src/cloud/disk_queue.cpp
   src/cloud/shadow.cpp
+  src/cloud/tls_identity.cpp
+  src/cloud/identity.cpp
 )
 target_include_directories(cloud PUBLIC . src)
 target_link_libraries(cloud PUBLIC util)
@@ -160,10 +162,21 @@ install(FILES config/config.example.ini DESTINATION /opt/register_mvp/share RENA
 # Systemd + logrotate
 install(FILES packaging/systemd/register-mvp.service DESTINATION /lib/systemd/system)
 install(FILES packaging/logrotate/register-mvp DESTINATION /etc/logrotate.d)
+install(FILES packaging/tmpfiles.d/register-mvp.conf DESTINATION /usr/lib/tmpfiles.d)
+install(FILES packaging/firewall/nftables.conf DESTINATION /opt/register_mvp/packaging)
+install(FILES packaging/sshd/sshd_hardening.conf DESTINATION /opt/register_mvp/packaging)
+install(FILES packaging/auditd/audit.rules DESTINATION /opt/register_mvp/packaging)
 
 # Postinst/prerm
 install(PROGRAMS scripts/postinst.sh DESTINATION /opt/register_mvp/packaging)
 install(PROGRAMS scripts/prerm.sh   DESTINATION /opt/register_mvp/packaging)
+install(PROGRAMS scripts/provision/provision_device.sh DESTINATION /opt/register_mvp/packaging)
+install(PROGRAMS scripts/rotate/rotate_secrets.sh DESTINATION /opt/register_mvp/packaging)
+install(PROGRAMS scripts/hardening/apply_hardening.sh DESTINATION /opt/register_mvp/packaging)
+install(PROGRAMS scripts/hardening/ro_root_overlay.sh DESTINATION /opt/register_mvp/packaging)
+install(PROGRAMS scripts/audit/security_audit.sh DESTINATION /opt/register_mvp/packaging)
+
+install(DIRECTORY docs/ DESTINATION /opt/register_mvp/share)
 
 # CPack metadata
 set(CPACK_GENERATOR "DEB")

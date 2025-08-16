@@ -4,16 +4,28 @@ After=network-online.target
 Wants=network-online.target
 
 [Service]
-Type=simple
-User=root
-Group=root
-WorkingDirectory=/opt/register_mvp
+User=registermvp
+Group=registermvp
 ExecStart=/opt/register_mvp/bin/register_mvp --pos-http
-Restart=on-failure
-RestartSec=2
-Environment=REGISTER_MVP_CONFIG=/etc/register-mvp/config.ini
-StandardOutput=append:/var/log/register-mvp/app.log
-StandardError=append:/var/log/register-mvp/app.err
+AmbientCapabilities=
+CapabilityBoundingSet=
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectSystem=strict
+ProtectHome=read-only
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectKernelLogs=true
+ProtectClock=true
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+RestrictRealtime=true
+RestrictSUIDSGID=true
+SystemCallFilter=@system-service @network-io
+ReadWritePaths=/var/log/register-mvp /var/lib/register-mvp /opt/register_mvp/data
+RuntimeDirectory=register-mvp
+StateDirectory=register-mvp
+UMask=0077
 
 [Install]
 WantedBy=multi-user.target

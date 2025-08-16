@@ -23,7 +23,9 @@ Config make_defaults() {
            "/etc/register-mvp/certs/AmazonRootCA1.pem",
            "/etc/register-mvp/certs/device.pem.crt",
            "/etc/register-mvp/certs/private.pem.key",
-           "register/REG-01", 1, "data/awsq", 8ull<<20};
+           "register/REG-01", 1, "data/awsq", 8ull<<20, 0, 60};
+  c.security = {1,1,1,"192.0.2.0/24",1,"registermvp"};
+  c.identity = {0,"0x81000001","http://ca.local/sign","/etc/register-mvp/certs","REG"};
   c.safety = {-1,-1,-1,true,10};
   c.service = {true,"1234",3,3,150,2,"data/service.log"};
   c.pos = {true,9090,""};
@@ -226,6 +228,56 @@ Config load() {
             uint64_t def = cfg.aws.max_queue_bytes;
             try { cfg.aws.max_queue_bytes = std::stoull(value); }
             catch (...) { cfg.aws.max_queue_bytes = def; cfg.warnings.push_back(fullkey + " invalid, using default " + std::to_string(def)); }
+          } else if (key == "use_tls_identity") {
+            bool def = cfg.aws.use_tls_identity;
+            try { cfg.aws.use_tls_identity = std::stoi(value) != 0; }
+            catch (...) { cfg.aws.use_tls_identity = def; cfg.warnings.push_back(fullkey + " invalid, using default " + (def?"1":"0")); }
+          } else if (key == "rotation_check_minutes") {
+            int def = cfg.aws.rotation_check_minutes;
+            try { cfg.aws.rotation_check_minutes = std::stoi(value); }
+            catch (...) { cfg.aws.rotation_check_minutes = def; cfg.warnings.push_back(fullkey + " invalid, using default " + std::to_string(def)); }
+          } else {
+            handled = false;
+          }
+        } else if (section == "security") {
+          handled = true;
+          if (key == "enable_ro_root") {
+            bool def = cfg.security.enable_ro_root;
+            try { cfg.security.enable_ro_root = std::stoi(value) != 0; }
+            catch (...) { cfg.security.enable_ro_root = def; cfg.warnings.push_back(fullkey + " invalid, using default " + (def?"1":"0")); }
+          } else if (key == "ssh_keys_only") {
+            bool def = cfg.security.ssh_keys_only;
+            try { cfg.security.ssh_keys_only = std::stoi(value) != 0; }
+            catch (...) { cfg.security.ssh_keys_only = def; cfg.warnings.push_back(fullkey + " invalid, using default " + (def?"1":"0")); }
+          } else if (key == "firewall_enable") {
+            bool def = cfg.security.firewall_enable;
+            try { cfg.security.firewall_enable = std::stoi(value) != 0; }
+            catch (...) { cfg.security.firewall_enable = def; cfg.warnings.push_back(fullkey + " invalid, using default " + (def?"1":"0")); }
+          } else if (key == "allow_ssh_from") {
+            cfg.security.allow_ssh_from = value;
+          } else if (key == "auditd_enable") {
+            bool def = cfg.security.auditd_enable;
+            try { cfg.security.auditd_enable = std::stoi(value) != 0; }
+            catch (...) { cfg.security.auditd_enable = def; cfg.warnings.push_back(fullkey + " invalid, using default " + (def?"1":"0")); }
+          } else if (key == "service_user") {
+            cfg.security.service_user = value;
+          } else {
+            handled = false;
+          }
+        } else if (section == "identity") {
+          handled = true;
+          if (key == "use_tpm") {
+            bool def = cfg.identity.use_tpm;
+            try { cfg.identity.use_tpm = std::stoi(value) != 0; }
+            catch (...) { cfg.identity.use_tpm = def; cfg.warnings.push_back(fullkey + " invalid, using default " + (def?"1":"0")); }
+          } else if (key == "tpm_parent_handle") {
+            cfg.identity.tpm_parent_handle = value;
+          } else if (key == "ca_endpoint") {
+            cfg.identity.ca_endpoint = value;
+          } else if (key == "cert_dir") {
+            cfg.identity.cert_dir = value;
+          } else if (key == "device_id_prefix") {
+            cfg.identity.device_id_prefix = value;
           } else {
             handled = false;
           }

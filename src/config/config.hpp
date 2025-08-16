@@ -24,6 +24,8 @@ struct Aws {
   int qos{1};
   std::string queue_dir{"data/awsq"};
   uint64_t max_queue_bytes{8ull<<20};
+  bool use_tls_identity{0};
+  int rotation_check_minutes{60};
 };
 
 struct Safety {
@@ -50,6 +52,23 @@ struct Pos {
   std::string key;
 };
 
+struct Security {
+  bool enable_ro_root{0};
+  bool ssh_keys_only{1};
+  bool firewall_enable{1};
+  std::string allow_ssh_from{""};
+  bool auditd_enable{1};
+  std::string service_user{"registermvp"};
+};
+
+struct Identity {
+  bool use_tpm{0};
+  std::string tpm_parent_handle{"0x81000001"};
+  std::string ca_endpoint{"http://ca.local/sign"};
+  std::string cert_dir{"/etc/register-mvp/certs"};
+  std::string device_id_prefix{"REG"};
+};
+
 struct Config {
   Pins pins{};
   Mechanics mech{};
@@ -59,6 +78,8 @@ struct Config {
   Presentation pres{};
   SelfTest st{};
   Aws aws{};
+  Security security{};
+  Identity identity{};
   Safety safety{};
   Service service{};
   Pos pos{};

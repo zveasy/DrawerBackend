@@ -1,0 +1,4 @@
+-w /opt/register_mvp/bin/register_mvp -p x -k register
+-w /etc/register-mvp/certs -p rwx -k register-certs
+-w /lib/systemd/system/register-mvp.service -p wa -k register-unit
+-a exit,always -F arch=b64 -S execve -k exec
