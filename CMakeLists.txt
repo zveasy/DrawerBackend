@@ -6,6 +6,8 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
 option(USE_MOCK_GPIO "Build with a mock GPIO HAL (no libgpiod)" ON)
+option(USE_AWS_SDK "Build with AWS IoT CRT MQTT client" OFF)
+option(USE_NLOHMANN_JSON "Use nlohmann/json single header" ON)
 
 if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
   add_compile_options(-Wall -Wextra -Wpedantic -O2 -g)
@@ -18,7 +20,12 @@ FetchContent_Declare(cpphttplib
 FetchContent_MakeAvailable(cpphttplib)
 add_library(httplib::httplib ALIAS httplib)
 
-find_package(nlohmann_json 3.2.0 REQUIRED)
+if(USE_NLOHMANN_JSON)
+  FetchContent_Declare(nlohmann_json
+    GIT_REPOSITORY https://github.com/nlohmann/json.git
+    GIT_TAG v3.11.2)
+  FetchContent_MakeAvailable(nlohmann_json)
+endif()
 
 # util
 add_library(util
@@ -26,6 +33,7 @@ add_library(util
   src/util/persist.cpp
   src/util/journal.cpp
   src/util/metrics.cpp
+  src/util/fs.cpp
 )
 target_include_directories(util PUBLIC . src)
 
@@ -85,9 +93,15 @@ target_include_directories(cfg PUBLIC . src)
 # cloud
 add_library(cloud
   src/cloud/iot_client.cpp
+  src/cloud/disk_queue.cpp
+  src/cloud/shadow.cpp
 )
 target_include_directories(cloud PUBLIC . src)
-target_link_libraries(cloud PUBLIC util nlohmann_json::nlohmann_json paho-mqttpp3 paho-mqtt3as)
+target_link_libraries(cloud PUBLIC util)
+if(USE_NLOHMANN_JSON)
+  target_link_libraries(cloud PUBLIC nlohmann_json::nlohmann_json)
+  target_compile_definitions(cloud PUBLIC USE_NLOHMANN_JSON=1)
+endif()
 
 # main executable
 add_executable(register_mvp src/main.cpp)

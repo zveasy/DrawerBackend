@@ -1,162 +1,76 @@
 #include "cloud/iot_client.hpp"
-
-#include <fstream>
+#include "cloud/shadow.hpp"
+#include <chrono>
 #include <sstream>
 
-#include <mqtt/async_client.h>
+using namespace std::chrono_literals;
 
-using json = nlohmann::json;
+namespace cloud {
 
-// ----- DiskQueue -----
-DiskQueue::DiskQueue(const std::string& path) : path_(path) {
-  std::ifstream f(path_);
-  std::string line;
-  while (std::getline(f, line)) {
-    if (!line.empty()) q_.push_back(line);
-  }
+IoTClient::IoTClient(IMqttClient& mqtt, const IoTOptions& opt)
+    : mqtt_(mqtt), opt_(opt), queue_(opt.queue_dir, opt.max_queue_bytes) {}
+
+IoTClient::~IoTClient() { stop(); }
+
+bool IoTClient::start() {
+  queue_.init();
+  mqtt_.subscribe(shadow::topic_update_delta(opt_.thing_name), opt_.qos,
+                  [this](const MqttMessage& m){ on_shadow_delta_(m); });
+  bool ok = mqtt_.connect();
+  running_ = true;
+  bg_ = std::thread(&IoTClient::bg_flush_loop_, this);
+  return ok;
 }
 
-void DiskQueue::persist() const {
-  std::ofstream f(path_, std::ios::trunc);
-  for (const auto& s : q_) {
-    f << s << '\n';
-  }
+void IoTClient::stop() {
+  running_ = false;
+  if (bg_.joinable()) bg_.join();
+  mqtt_.disconnect();
 }
 
-void DiskQueue::push(const std::string& msg) {
-  q_.push_back(msg);
-  persist();
+bool IoTClient::publish_txn(const journal::Txn& t) {
+  MqttMessage m;
+  m.topic = opt_.topic_prefix + "/telemetry";
+  m.qos = opt_.qos;
+  m.payload = journal::to_json(t);
+  if (mqtt_.is_connected() && mqtt_.publish(m)) return true;
+  return queue_.enqueue(m);
 }
 
-void DiskQueue::pop() {
-  if (!q_.empty()) {
-    q_.pop_front();
-    persist();
-  }
+bool IoTClient::publish_health(const std::string& json) {
+  MqttMessage m{opt_.topic_prefix + "/telemetry", json, opt_.qos, false};
+  if (mqtt_.is_connected() && mqtt_.publish(m)) return true;
+  return queue_.enqueue(m);
 }
 
-// ----- IotClient -----
-IotClient::IotClient(std::unique_ptr<IMqttClient> mqtt,
-                     const std::string& queue_path,
-                     const std::string& thing_id)
-    : mqtt_(std::move(mqtt)), queue_(queue_path), thing_id_(thing_id) {
-  mqtt_->set_message_handler(
-      [this](const std::string& topic, const std::string& payload) {
-        on_message(topic, payload);
-      });
+void IoTClient::set_shadow_callback(std::function<void(const std::map<std::string,std::string>&)> cb) {
+  cb_ = std::move(cb);
 }
 
-bool IotClient::connect() {
-  if (!mqtt_->connect()) return false;
-  mqtt_->subscribe("$aws/things/" + thing_id_ + "/shadow/update/delta");
-  flush_queue();
-  return true;
+bool IoTClient::publish_reported(const std::map<std::string,std::string>& kv) {
+  MqttMessage m{shadow::topic_update(opt_.thing_name), shadow::build_reported(kv), opt_.qos, false};
+  if (mqtt_.is_connected() && mqtt_.publish(m)) return true;
+  return queue_.enqueue(m);
 }
 
-void IotClient::publish_telemetry(const json& txn, const json& health) {
-  json msg;
-  msg["txn"] = txn;
-  msg["health"] = health;
-  std::string payload = msg.dump();
-  std::string topic = "register/" + thing_id_ + "/telemetry";
-  if (!mqtt_->publish(topic, payload)) {
-    queue_.push(payload);
-  }
-}
-
-void IotClient::update_shadow_reported(const json& reported) {
-  json j;
-  j["state"]["reported"] = reported;
-  mqtt_->publish("$aws/things/" + thing_id_ + "/shadow/update", j.dump());
-}
-
-void IotClient::flush_queue() {
-  while (!queue_.empty()) {
-    std::string msg = queue_.front();
-    if (mqtt_->publish("register/" + thing_id_ + "/telemetry", msg)) {
-      queue_.pop();
+void IoTClient::bg_flush_loop_() {
+  while (running_) {
+    if (!mqtt_.is_connected()) {
+      mqtt_.connect();
     } else {
-      break;
+      queue_.try_flush(mqtt_);
     }
+    std::this_thread::sleep_for(100ms);
   }
 }
 
-void IotClient::on_message(const std::string& topic,
-                           const std::string& payload) {
-  if (topic.find("/shadow/update/delta") != std::string::npos) {
-    try {
-      auto j = json::parse(payload);
-      if (shadow_cb_ && j.contains("state")) shadow_cb_(j["state"]);
-    } catch (...) {
-    }
+void IoTClient::on_shadow_delta_(const MqttMessage& m) {
+  auto kv = shadow::parse_desired(m.payload);
+  if (!kv.empty()) {
+    if (cb_) cb_(kv);
+    publish_reported(kv);
   }
 }
 
-// ----- Paho MQTT implementation -----
-class PahoMqttClient : public IMqttClient, public virtual mqtt::callback {
-  mqtt::async_client client_;
-  mqtt::connect_options conn_;
-  std::function<void(const std::string&, const std::string&)> cb_;
-
-public:
-  PahoMqttClient(const std::string& endpoint, const std::string& client_id,
-                 const std::string& cert, const std::string& key,
-                 const std::string& ca)
-      : client_("ssl://" + endpoint + ":8883", client_id) {
-    mqtt::ssl_options ssl;
-    ssl.set_trust_store(ca);
-    ssl.set_key_store(cert);
-    ssl.set_private_key(key);
-    conn_.set_clean_session(true);
-    conn_.set_ssl(ssl);
-    client_.set_callback(*this);
-  }
-
-  bool connect() override {
-    try {
-      client_.connect(conn_)->wait();
-      return true;
-    } catch (...) {
-      return false;
-    }
-  }
-
-  bool publish(const std::string& topic, const std::string& payload) override {
-    try {
-      auto msg = mqtt::make_message(topic, payload);
-      client_.publish(msg)->wait();
-      return true;
-    } catch (...) {
-      return false;
-    }
-  }
-
-  bool subscribe(const std::string& topic) override {
-    try {
-      client_.subscribe(topic, 1)->wait();
-      return true;
-    } catch (...) {
-      return false;
-    }
-  }
-
-  void set_message_handler(
-      std::function<void(const std::string&, const std::string&)> cb) override {
-    cb_ = std::move(cb);
-  }
-
-  void message_arrived(mqtt::const_message_ptr msg) override {
-    if (cb_) cb_(msg->get_topic(), msg->to_string());
-  }
-
-  void connection_lost(const std::string&) override {}
-};
-
-std::unique_ptr<IMqttClient> make_paho_client(const std::string& endpoint,
-                                              const std::string& client_id,
-                                              const std::string& cert,
-                                              const std::string& key,
-                                              const std::string& ca) {
-  return std::make_unique<PahoMqttClient>(endpoint, client_id, cert, key, ca);
-}
+} // namespace cloud
 
