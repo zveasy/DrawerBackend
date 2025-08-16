@@ -5,21 +5,26 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
-option(USE_MOCK_GPIO "Use mock GPIO" ON)
+option(USE_MOCK_GPIO "Build with a mock GPIO HAL (no libgpiod)" ON)
 
 if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
   add_compile_options(-Wall -Wextra -Wpedantic -O2 -g)
 endif()
 
 # util
-add_library(util util/log.cpp)
-target_include_directories(util PUBLIC .)
+add_library(util
+  util/log.cpp
+  src/util/persist.cpp
+)
+target_include_directories(util PUBLIC . src)
 
 # hal
-add_library(hal hal/gpio.hpp hal/time.hpp)
+add_library(hal
+  hal/gpio.hpp
+  hal/time.hpp
+)
 target_include_directories(hal PUBLIC .)
 target_link_libraries(hal PUBLIC util)
-
 if(USE_MOCK_GPIO)
   target_sources(hal PRIVATE hal/gpio_mock.cpp)
   target_compile_definitions(hal PUBLIC USE_MOCK_GPIO=1)
@@ -27,75 +32,31 @@ else()
   include(cmake/gpiod.cmake)
   find_gpiod()
   target_sources(hal PRIVATE hal/gpio_gpiod.cpp)
-
-
-option(USE_MOCK_GPIO "Build with a mock GPIO HAL (no libgpiod)" ON)
-
-add_library(hal
-  src/hal/gpio.hpp
-  src/hal/gpio_mock.cpp
-  src/hal/gpio_gpiod.cpp
-)
-
-target_include_directories(hal PUBLIC src)
-
-if(NOT USE_MOCK_GPIO)
-  find_package(PkgConfig REQUIRED)
-  pkg_check_modules(GPIOD REQUIRED libgpiod)
-  target_compile_definitions(hal PUBLIC -DUSE_LIBGPIOD=1)
-
-
-  target_include_directories(hal PUBLIC ${GPIOD_INCLUDE_DIRS})
-  target_link_libraries(hal PUBLIC ${GPIOD_LIBRARIES})
+  target_compile_definitions(hal PUBLIC USE_LIBGPIOD=1)
 endif()
 
-# sim
-add_library(sim sim/sim.cpp)
-target_include_directories(sim PUBLIC .)
-
 # drivers
-add_library(drivers src/drivers/stepper.cpp)
+add_library(drivers
+  src/drivers/stepper.cpp
+  src/drivers/hopper_parallel.cpp
+  src/drivers/hx711.cpp
+)
 target_include_directories(drivers PUBLIC src .)
 target_link_libraries(drivers PUBLIC hal)
 
 # app
-add_library(app src/app/shutter_fsm.cpp)
+add_library(app
+  src/app/shutter_fsm.cpp
+  src/app/dispense_ctrl.cpp
+)
 target_include_directories(app PUBLIC src .)
-target_link_libraries(app PUBLIC drivers util hal)
+target_link_libraries(app PUBLIC drivers hal util)
 
 # main executable
 add_executable(register_mvp src/main.cpp)
-target_link_libraries(register_mvp PRIVATE sim util hal drivers app)
+target_link_libraries(register_mvp PRIVATE app drivers hal util)
 target_include_directories(register_mvp PRIVATE src .)
-if(NOT USE_MOCK_GPIO)
-  target_sources(register_mvp PRIVATE hal/gpio_mock.cpp)
-
-# executable always uses mock chip
-add_executable(register_mvp_sim main.cpp)
-target_link_libraries(register_mvp_sim PRIVATE sim util hal)
-target_include_directories(register_mvp_sim PRIVATE .)
-if(NOT USE_MOCK_GPIO)
-  target_sources(register_mvp_sim PRIVATE hal/gpio_mock.cpp)
-
-endif()
 
 enable_testing()
 add_subdirectory(tests)
 
-
-
-add_library(drivers
-  src/drivers/stepper.hpp src/drivers/stepper.cpp
-  src/drivers/hopper_parallel.hpp src/drivers/hopper_parallel.cpp
-  src/drivers/hx711.hpp src/drivers/hx711.cpp
-)
-target_link_libraries(drivers PUBLIC hal)
-
-add_executable(register_mvp src/main.cpp)
-target_link_libraries(register_mvp PRIVATE drivers hal pthread)
-
-if (CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
-  target_compile_options(hal PRIVATE -Wall -Wextra -Wpedantic)
-  target_compile_options(drivers PRIVATE -Wall -Wextra -Wpedantic)
-  target_compile_options(register_mvp PRIVATE -Wall -Wextra -Wpedantic)
-endif()
