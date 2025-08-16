@@ -17,6 +17,8 @@
 #include "util/journal.hpp"
 #include "server/http_server.hpp"
 #include "pos/http_pos.hpp"
+#include "pos/router.hpp"
+#include "pos/idempotency_store.hpp"
 #include "ui/tui.hpp"
 #include "cloud/iot_client.hpp"
 #include "cloud/mqtt_loopback.cpp"
@@ -247,7 +249,10 @@ int main(int argc, char** argv) {
       pos::Options popt;
       popt.port = pos_port;
       popt.shared_key = cfg.pos.key;
-      pos::HttpConnector conn(eng, popt);
+      pos::IdempotencyStore store("/var/lib/register-mvp/pos");
+      store.open();
+      pos::Router router(eng, store);
+      pos::HttpConnector conn(router, popt);
       if (!conn.start()) return 1;
       std::cout << "POS listening on " << popt.bind << ":" << conn.port() << std::endl;
       while (true) std::this_thread::sleep_for(std::chrono::seconds(60));

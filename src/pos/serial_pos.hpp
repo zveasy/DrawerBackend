@@ -1,19 +1,23 @@
 #pragma once
 #include "connector.hpp"
+#include "router.hpp"
 
 namespace pos {
 
-// Optional serial POS connector stub. To implement:
-//  - Open /dev/ttyAMA0
-//  - Speak a simple line protocol: PRICE=<cents>;DEPOSIT=<cents>\n
-//  - Parse response and invoke TxnEngine
+// Simplified serial connector used for tests.  Real implementation would
+// manage a serial port; here we expose a handle_line helper that consumes a
+// single request line and returns the device response.
 class SerialConnector : public Connector {
 public:
-  SerialConnector(TxnEngine& eng, const Options& opt = Options());
+  SerialConnector(Router &router, const Options &opt = Options());
   bool start() override; // no-op
-  void stop() override; // no-op
+  void stop() override;  // no-op
+
+  // Process a line of ASCII protocol, returning response line.
+  std::string handle_line(const std::string &line);
+
 private:
-  TxnEngine& eng_;
+  Router &router_;
   Options opt_;
 };
 

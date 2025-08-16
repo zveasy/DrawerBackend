@@ -140,13 +140,15 @@ target_link_libraries(ota PUBLIC util cfg httplib::httplib)
 # pos connectors
 add_library(pos
   src/pos/http_pos.cpp
+  src/pos/serial_pos.cpp
+  src/pos/router.cpp
+  src/pos/contracts.cpp
+  src/pos/idempotency_store.cpp
+  src/pos/vendors/vendor_a_adapter.cpp
+  src/pos/vendors/vendor_b_adapter.cpp
 )
 target_include_directories(pos PUBLIC . src)
-target_link_libraries(pos PUBLIC app httplib::httplib pthread)
-if(ENABLE_SERIAL_POS)
-  target_sources(pos PRIVATE src/pos/serial_pos.cpp)
-  target_compile_definitions(pos PRIVATE ENABLE_SERIAL_POS)
-endif()
+target_link_libraries(pos PUBLIC app httplib::httplib pthread nlohmann_json::nlohmann_json)
 
 # config
 add_library(cfg
