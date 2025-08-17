@@ -122,6 +122,7 @@ add_library(server
   src/server/http_server.cpp
   src/server/version_endpoint.cpp
   src/server/eol_endpoint.cpp
+  src/server/docs_endpoint.cpp
   src/ui/tui.cpp
 )
 target_include_directories(server PUBLIC . src)
@@ -216,10 +217,13 @@ install(PROGRAMS scripts/hardening/apply_hardening.sh DESTINATION /opt/register_
 install(PROGRAMS scripts/hardening/ro_root_overlay.sh DESTINATION /opt/register_mvp/packaging)
 install(PROGRAMS scripts/audit/security_audit.sh DESTINATION /opt/register_mvp/packaging)
 
-install(DIRECTORY docs/ DESTINATION /opt/register_mvp/share PATTERN "compliance" EXCLUDE)
+install(DIRECTORY docs/ DESTINATION /opt/register_mvp/share/docs PATTERN "compliance" EXCLUDE PATTERN "wi" EXCLUDE PATTERN "dfm_dfa" EXCLUDE PATTERN "eol" EXCLUDE)
 install(DIRECTORY docs/compliance/ DESTINATION /opt/register_mvp/share/compliance)
 install(DIRECTORY scripts/compliance/ DESTINATION /opt/register_mvp/bin/compliance FILE_PERMISSIONS OWNER_EXECUTE OWNER_WRITE OWNER_READ GROUP_READ GROUP_EXECUTE WORLD_READ WORLD_EXECUTE)
 install(DIRECTORY docs/wi docs/dfm_dfa docs/eol DESTINATION /opt/register_mvp/share/mfg)
+install(DIRECTORY assets/ DESTINATION /opt/register_mvp/share/docs/assets)
+install(PROGRAMS scripts/support/collect_support_bundle.sh scripts/support/redact_bundle.py DESTINATION /opt/register_mvp/bin/support)
+install(PROGRAMS scripts/demo/smoke_store_demo.sh DESTINATION /opt/register_mvp/bin/demo)
 install(PROGRAMS scripts/provision/provision_unit.sh scripts/provision/print_label.py scripts/eol/run_eol.py scripts/eol/collect_reports.py DESTINATION /opt/register_mvp/bin/mfg)
 install(FILES packaging/systemd/register-mvp-eol.service packaging/systemd/register-mvp-eol.path DESTINATION /lib/systemd/system)
 

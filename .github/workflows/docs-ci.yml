@@ -1,0 +1,16 @@
+name: docs-ci
+on:
+  pull_request:
+    paths:
+      - 'docs/**'
+      - 'mkdocs.yml'
+      - 'scripts/docs/**'
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Lint markdown
+        run: scripts/docs/lint_markdown.sh
+      - name: Check links
+        run: scripts/docs/check_links.sh
