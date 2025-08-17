@@ -1,0 +1,21 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-prom-ingress
+spec:
+  podSelector:
+    matchLabels:
+      app: register-ops
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              name: ingress
+        - namespaceSelector:
+            matchLabels:
+              name: monitoring
+      ports:
+        - protocol: TCP
+          port: {{ .Values.service.port }}
+  policyTypes:
+    - Ingress

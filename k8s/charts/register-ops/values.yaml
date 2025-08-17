@@ -1,0 +1,19 @@
+image:
+  repository: ""
+  tag: "latest"
+  pullPolicy: IfNotPresent
+service:
+  port: 8080
+ingress:
+  enabled: false
+  className: nginx
+  host: "ops.example.com"
+resources:
+  limits:
+    cpu: "500m"
+    memory: "512Mi"
+  requests:
+    cpu: "100m"
+    memory: "128Mi"
+serviceAccount:
+  create: true

@@ -1,0 +1,14 @@
+# Build stage
+FROM gcc:13 AS build
+WORKDIR /app
+COPY . .
+RUN apt-get update && apt-get install -y cmake make && \
+    cmake -DUSE_MOCK_GPIO=ON -S . -B build && \
+    cmake --build build --target ops-api
+
+# Runtime stage
+FROM gcr.io/distroless/cc-debian12
+COPY --from=build /app/build/ops-api /usr/local/bin/ops-api
+USER 1000
+EXPOSE 8080
+ENTRYPOINT ["/usr/local/bin/ops-api"]
