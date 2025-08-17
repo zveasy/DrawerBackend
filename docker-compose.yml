@@ -1,0 +1,12 @@
+version: "3.8"
+services:
+  drawerbackend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    volumes:
+      - .:/workspace/DrawerBackend
+    working_dir: /workspace/DrawerBackend
+    command: sleep infinity
+    devices:
+      - "/dev/gpiochip0:/dev/gpiochip0"

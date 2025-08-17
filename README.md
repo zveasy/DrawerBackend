@@ -70,6 +70,20 @@ docker build -t register_mvp --build-arg USE_MOCK_GPIO=OFF .
 docker run --rm --device /dev/gpiochip0 register_mvp
 ```
 
+For a persistent development container that works across operating systems, use
+the included Docker Compose file:
+
+```bash
+docker compose up -d --build
+docker compose exec drawerbackend bash
+```
+
+When you're finished, shut down the container with:
+
+```bash
+docker compose down
+```
+
 
 
 ## Dev container
