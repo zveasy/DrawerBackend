@@ -99,3 +99,49 @@ so the project is ready to run:
 ```
 ./build/register_mvp
 ```
+
+## Makefile quickstart
+
+Common workflows are wrapped in a Makefile:
+
+```bash
+# configure + build
+make build
+
+# run unit tests (after configuring with -DBUILD_TESTING=ON)
+make test
+
+# start/stop all dev services (API:8080, Docs API:8082, POS:9090, TUI:8081)
+make dev-up
+make dev-down
+
+# tail all service logs
+make tail-logs
+
+# run smoke tests against running services
+make smoke
+```
+
+## Docs endpoint
+
+The API serves docs under `/help`.
+
+- Root is controlled by env var `REGISTER_MVP_DOCS_PATH` (defaults to `/opt/register_mvp/share/docs`).
+- Index: `GET /help` lists available documents.
+- Files: `GET /help/<name>` serves files directly from the docs root.
+- Fallback: if a `.html` file is not found, the server will attempt the corresponding `.md` file. For example, `/help/index.html` will serve `index.md` if present.
+
+## Smoke tests
+
+With dev services running (via `make dev-up`), run:
+
+```bash
+make smoke
+```
+
+This verifies:
+
+- API `/version` and `/status`
+- Docs `/help` index and `/help/index.html` fallback to Markdown
+- POS `/ping`
+

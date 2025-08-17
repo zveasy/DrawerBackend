@@ -64,7 +64,8 @@ DispenseResult DispenseController::dispenseCoins(int coins) {
         res.reason = hopper_.coinCount() > 0 ? "PARTIAL" : "TIMEOUT";
         goto done;
       }
-      hal::sleep_us(1000);
+      // Poll faster to avoid missing short pulses from the sensor
+      hal::sleep_us(cfg_.poll_us);
     }
     if (attempt < cfg_.max_retries) {
       hal::sleep_us(100000); // backoff

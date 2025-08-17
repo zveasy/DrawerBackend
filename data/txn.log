@@ -1,0 +1,6 @@
+{"ts":"2025-08-17T18:52:15Z","id":"txn-1755456735665940000","price":125,"deposit":200,"change":75,"quarters":3,"phase":"PENDING","dispensed":0,"reason":"","host":"Zakariyas-Mac-Studio.local"}
+{"ts":"2025-08-17T18:52:18Z","id":"txn-1755456735665940000","price":125,"deposit":200,"change":75,"quarters":3,"phase":"DISPENSING","dispensed":0,"reason":"JAM","host":"Zakariyas-Mac-Studio.local"}
+{"ts":"2025-08-17T18:52:18Z","id":"txn-1755456735665940000","price":125,"deposit":200,"change":75,"quarters":3,"phase":"VOID","dispensed":0,"reason":"JAM","host":"Zakariyas-Mac-Studio.local"}
+{"ts":"2025-08-17T18:57:25Z","id":"txn-1755457045019135000","price":100,"deposit":200,"change":100,"quarters":4,"phase":"PENDING","dispensed":0,"reason":"","host":"Zakariyas-Mac-Studio.local"}
+{"ts":"2025-08-17T18:57:27Z","id":"txn-1755457045019135000","price":100,"deposit":200,"change":100,"quarters":4,"phase":"DISPENSING","dispensed":0,"reason":"JAM","host":"Zakariyas-Mac-Studio.local"}
+{"ts":"2025-08-17T18:57:27Z","id":"txn-1755457045019135000","price":100,"deposit":200,"change":100,"quarters":4,"phase":"VOID","dispensed":0,"reason":"JAM","host":"Zakariyas-Mac-Studio.local"}

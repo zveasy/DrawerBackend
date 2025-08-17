@@ -10,6 +10,7 @@ struct DispenseConfig {
   int settle_ms = 120;      // grace after motor start
   int max_ms_per_coin = 300;
   int hard_timeout_ms = 5000;
+  int poll_us = 200;        // polling interval for hopper sensor
 };
 
 struct DispenseResult {

@@ -28,6 +28,15 @@ FetchContent_Declare(cpphttplib
 FetchContent_MakeAvailable(cpphttplib)
 add_library(httplib::httplib ALIAS httplib)
 
+# On macOS, cpp-httplib may enable loading certs from the system keychain which
+# pulls in <Security/Security.h> and clashes with our `namespace audit` symbol name.
+# Remove CPPHTTPLIB_USE_CERTS_FROM_MACOSX_KEYCHAIN from the interface definitions.
+get_target_property(_httplib_defs httplib INTERFACE_COMPILE_DEFINITIONS)
+if(_httplib_defs)
+  list(REMOVE_ITEM _httplib_defs CPPHTTPLIB_USE_CERTS_FROM_MACOSX_KEYCHAIN)
+  set_target_properties(httplib PROPERTIES INTERFACE_COMPILE_DEFINITIONS "${_httplib_defs}")
+endif()
+
 if(USE_NLOHMANN_JSON)
   FetchContent_Declare(nlohmann_json
     GIT_REPOSITORY https://github.com/nlohmann/json.git
@@ -126,7 +135,9 @@ add_library(server
   src/ui/tui.cpp
 )
 target_include_directories(server PUBLIC . src)
-target_link_libraries(server PUBLIC app httplib::httplib pthread obs mfg)
+target_link_libraries(server PUBLIC app httplib::httplib pthread obs mfg OpenSSL::SSL OpenSSL::Crypto)
+target_compile_definitions(server PUBLIC CPPHTTPLIB_OPENSSL_SUPPORT)
+target_compile_options(server PRIVATE -UCPPHTTPLIB_USE_CERTS_FROM_MACOSX_KEYCHAIN)
 
 # ota
 add_library(ota
@@ -136,7 +147,9 @@ add_library(ota
   src/ota/healthd.cpp
 )
 target_include_directories(ota PUBLIC . src)
-target_link_libraries(ota PUBLIC util cfg httplib::httplib)
+target_link_libraries(ota PUBLIC util cfg httplib::httplib OpenSSL::SSL OpenSSL::Crypto)
+target_compile_definitions(ota PUBLIC CPPHTTPLIB_OPENSSL_SUPPORT)
+target_compile_options(ota PRIVATE -UCPPHTTPLIB_USE_CERTS_FROM_MACOSX_KEYCHAIN)
 
 # pos connectors
 add_library(pos
@@ -149,7 +162,9 @@ add_library(pos
   src/pos/vendors/vendor_b_adapter.cpp
 )
 target_include_directories(pos PUBLIC . src)
-target_link_libraries(pos PUBLIC app httplib::httplib pthread nlohmann_json::nlohmann_json)
+target_link_libraries(pos PUBLIC app httplib::httplib pthread nlohmann_json::nlohmann_json OpenSSL::SSL OpenSSL::Crypto)
+target_compile_definitions(pos PUBLIC CPPHTTPLIB_OPENSSL_SUPPORT)
+target_compile_options(pos PRIVATE -UCPPHTTPLIB_USE_CERTS_FROM_MACOSX_KEYCHAIN)
 
 # config
 add_library(cfg
@@ -184,7 +199,9 @@ target_link_libraries(mfg PUBLIC app drivers util cfg cloud)
 
 # main executable
 add_executable(register_mvp src/main.cpp)
-target_link_libraries(register_mvp PRIVATE app drivers hal util cfg server cloud safety pos obs compliance)
+target_link_libraries(register_mvp PRIVATE app drivers hal util cfg server cloud safety pos obs compliance OpenSSL::SSL OpenSSL::Crypto)
+target_compile_definitions(register_mvp PRIVATE CPPHTTPLIB_OPENSSL_SUPPORT)
+target_compile_options(register_mvp PRIVATE -UCPPHTTPLIB_USE_CERTS_FROM_MACOSX_KEYCHAIN)
 target_include_directories(register_mvp PRIVATE . src)
 
 if(BUILD_TESTING)
@@ -235,4 +252,18 @@ set(CPACK_PACKAGE_CONTACT "ops@yourcompany.com")
 set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "Register MVP with POS connector and local API")
 set(CPACK_DEBIAN_PACKAGE_MAINTAINER "YourCompany")
 set(CPACK_PACKAGE_VERSION "1.0.0")
+
+# Dev convenience targets to manage local services
+add_custom_target(dev-up
+  COMMAND ${CMAKE_COMMAND} -E env REGISTER_MVP_DOCS_PATH=${CMAKE_SOURCE_DIR}/docs ${CMAKE_SOURCE_DIR}/scripts/dev/start_all.sh
+  WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+  USES_TERMINAL
+)
+
+add_custom_target(dev-down
+  COMMAND ${CMAKE_SOURCE_DIR}/scripts/dev/stop_all.sh
+  WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+  USES_TERMINAL
+)
+
 include(CPack)

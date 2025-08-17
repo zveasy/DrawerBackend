@@ -1,0 +1,4 @@
+[DEBUG] write line=25 val=1
+[DEBUG] write line=5 val=0
+[DEBUG] read line=6 val=0
+API listening on 127.0.0.1:8082

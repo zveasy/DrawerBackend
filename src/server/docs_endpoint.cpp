@@ -50,7 +50,18 @@ void register_docs_routes(httplib::Server& svr) {
 
   svr.Get(R"(/help/(.*))", [](const httplib::Request& req, httplib::Response& res){
     fs::path target;
-    if (!safe_join(req.matches[1], target)) { res.status = 404; return; }
+    std::string rel = req.matches[1];
+    if (!safe_join(rel, target)) { res.status = 404; return; }
+
+    // If the requested path doesn't exist and ends with .html, try a .md fallback
+    if (!fs::exists(target) && target.extension() == ".html") {
+      fs::path md_try = target;
+      md_try.replace_extension(".md");
+      if (fs::exists(md_try)) {
+        target = md_try;
+      }
+    }
+
     std::ifstream ifs(target, std::ios::binary);
     if (!ifs) { res.status = 404; return; }
     std::ostringstream oss; oss << ifs.rdbuf();
