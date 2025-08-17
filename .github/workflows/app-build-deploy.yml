@@ -1,0 +1,41 @@
+name: Build and Deploy Ops API
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'docker/Dockerfile.ops'
+      - 'k8s/**'
+      - 'src/**'
+      - '.github/workflows/app-build-deploy.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  build-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: us-east-1
+      - name: Login to ECR
+        uses: aws-actions/amazon-ecr-login@v2
+      - name: Build image
+        run: |
+          docker build -f docker/Dockerfile.ops -t ${{ env.ECR_REPO }}:${{ github.sha }} .
+          docker push ${{ env.ECR_REPO }}:${{ github.sha }}
+      - name: Deploy chart
+        run: |
+          aws eks update-kubeconfig --name ${{ env.EKS_CLUSTER }}
+          helm upgrade --install register-ops k8s/charts/register-ops \
+            --namespace ops --create-namespace \
+            --set image.repository=${{ env.ECR_REPO }} \
+            --set image.tag=${{ github.sha }}
+    env:
+      ECR_REPO: ${{ secrets.ECR_REPO }}
+      EKS_CLUSTER: ${{ secrets.EKS_CLUSTER }}

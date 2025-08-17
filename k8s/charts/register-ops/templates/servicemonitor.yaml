@@ -1,0 +1,13 @@
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: register-ops
+  labels:
+    release: prometheus
+spec:
+  selector:
+    matchLabels:
+      app: register-ops
+  endpoints:
+    - port: http
+      path: /metrics
