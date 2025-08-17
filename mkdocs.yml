@@ -1,0 +1,31 @@
+site_name: Register MVP Docs
+nav:
+  - Home: index.md
+  - Install:
+      - Installer Guide: install/InstallerGuide.md
+      - Preflight Checklist: install/PreflightChecklist.md
+      - Store Demo Checklist: install/StoreDemoChecklist.md
+  - Operator:
+      - Quick Start: operator/QuickStart.md
+      - Safety Sheet: operator/SafetySheet.md
+  - Service:
+      - Service Manual: service/ServiceManual.md
+      - Parts Replacement: service/PartsReplacement.md
+      - Jam Clear: service/JamClear.md
+  - API:
+      - Local API: api/LocalAPI.md
+      - POS Webhook: api/POSWebhook.md
+  - Support:
+      - Playbooks: support/Playbooks.md
+      - Troubleshooting Tree: support/TroubleshootingTree.md
+      - Top 10 Issues: support/Top10Issues.md
+      - FAQ: support/FAQ.md
+      - Glossary: support/Glossary.md
+  - RMA:
+      - RMA Process: rma/RMA_Process.md
+      - Spares Kit: rma/SparesKit.md
+      - Spares Kit CSV: rma/SparesKit.csv
+  - Training:
+      - Video Script: training/TrainingVideo_Script.md
+      - Slides: training/TrainingSlides.md
+      - Knowledge Check: training/KnowledgeCheck.md

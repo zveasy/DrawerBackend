@@ -5,6 +5,7 @@
 #include <chrono>
 #include "obs/metrics.hpp"
 #include "server/version_endpoint.hpp"
+#include "server/docs_endpoint.hpp"
 
 struct HttpServer::Impl {
   httplib::Server server;
@@ -73,6 +74,7 @@ static bool get_int_field(const std::string& body, const std::string& key, int& 
 void HttpServer::setup_routes() {
   auto& svr = impl_->server;
   server::register_version_routes(svr);
+  server::register_docs_routes(svr);
   svr.Post("/txn", [this](const httplib::Request& req, httplib::Response& res) {
     struct Guard {
       HttpServer* s; bool ok; Guard(HttpServer* s_) : s(s_), ok(s_->busy_try_acquire()) {}
