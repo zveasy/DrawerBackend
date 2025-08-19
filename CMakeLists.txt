@@ -159,6 +159,10 @@ add_library(server
 )
 target_include_directories(server PUBLIC . src)
 target_link_libraries(server PUBLIC app httplib::httplib Threads::Threads obs mfg OpenSSL::SSL OpenSSL::Crypto)
+if(USE_NLOHMANN_JSON)
+  target_link_libraries(server PUBLIC nlohmann_json::nlohmann_json)
+  target_compile_definitions(server PUBLIC USE_NLOHMANN_JSON=1)
+endif()
 target_compile_definitions(server PUBLIC CPPHTTPLIB_OPENSSL_SUPPORT)
 target_compile_options(server PRIVATE -UCPPHTTPLIB_USE_CERTS_FROM_MACOSX_KEYCHAIN)
 
