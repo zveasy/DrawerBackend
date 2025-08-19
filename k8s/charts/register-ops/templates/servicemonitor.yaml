@@ -3,7 +3,7 @@ kind: ServiceMonitor
 metadata:
   name: register-ops
   labels:
-    release: prometheus
+    release: {{ .Values.prometheus.release | default "prometheus" }}
 spec:
   selector:
     matchLabels:

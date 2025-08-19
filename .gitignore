@@ -2,3 +2,13 @@ build*/
 *.o
 *.obj
 *.exe
+
+# Terraform local state, providers, and locks
+**/.terraform/
+**/.terraform.lock.hcl
+**/terraform.tfstate
+**/terraform.tfstate.backup
+**/*.tfstate
+
+# macOS
+.DS_Store

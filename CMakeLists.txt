@@ -17,6 +17,7 @@ if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
 endif()
 
 find_package(OpenSSL REQUIRED)
+find_package(Threads REQUIRED)
 
 set(APP_VERSION "1.0.0")
 execute_process(COMMAND git rev-parse --short HEAD OUTPUT_VARIABLE GIT_SHA OUTPUT_STRIP_TRAILING_WHITESPACE)
@@ -77,7 +78,7 @@ add_library(obs
   src/obs/sli_slo.cpp
 )
 target_include_directories(obs PUBLIC . src)
-target_link_libraries(obs PUBLIC httplib::httplib pthread)
+target_link_libraries(obs PUBLIC httplib::httplib Threads::Threads)
 
 # hal
 add_library(hal
@@ -147,7 +148,7 @@ add_library(server
   src/ui/tui.cpp
 )
 target_include_directories(server PUBLIC . src)
-target_link_libraries(server PUBLIC app httplib::httplib pthread obs mfg OpenSSL::SSL OpenSSL::Crypto)
+target_link_libraries(server PUBLIC app httplib::httplib Threads::Threads obs mfg OpenSSL::SSL OpenSSL::Crypto)
 target_compile_definitions(server PUBLIC CPPHTTPLIB_OPENSSL_SUPPORT)
 target_compile_options(server PRIVATE -UCPPHTTPLIB_USE_CERTS_FROM_MACOSX_KEYCHAIN)
 
@@ -174,7 +175,7 @@ add_library(pos
   src/pos/vendors/vendor_b_adapter.cpp
 )
 target_include_directories(pos PUBLIC . src)
-target_link_libraries(pos PUBLIC app httplib::httplib pthread nlohmann_json::nlohmann_json OpenSSL::SSL OpenSSL::Crypto)
+target_link_libraries(pos PUBLIC app httplib::httplib Threads::Threads nlohmann_json::nlohmann_json OpenSSL::SSL OpenSSL::Crypto)
 target_compile_definitions(pos PUBLIC CPPHTTPLIB_OPENSSL_SUPPORT)
 target_compile_options(pos PRIVATE -UCPPHTTPLIB_USE_CERTS_FROM_MACOSX_KEYCHAIN)
 
