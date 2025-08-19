@@ -1,0 +1,42 @@
+name: static-analysis
+
+on:
+  pull_request:
+
+jobs:
+  static-analysis:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cppcheck clang-tidy
+          pip install pip-licenses pip-audit pre-commit
+      - name: Run pre-commit
+        run: pre-commit run --all-files
+      - name: Run cppcheck
+        run: |
+          cppcheck --enable=all --inconclusive --error-exitcode=1 --xml --xml-version=2 . 2> cppcheck.xml
+      - name: Run clang analyzer
+        run: |
+          clang-tidy $(git ls-files '*.c' '*.cc' '*.cpp' '*.cxx' '*.h' '*.hh' '*.hpp') \
+            --checks='clang-analyzer-*' --warnings-as-errors='*' \
+            --extra-arg=-Isrc --extra-arg=-I. --extra-arg=-I/usr/src/googletest/googletest/include \
+            2> clang-analyzer.txt
+      - name: License and dependency scan
+        run: |
+          pip-licenses --format=json --output-file=licenses.json --fail-on=AGPL-3.0
+          pip-audit -f json -o pip-audit.json
+      - name: Upload analysis reports
+        uses: actions/upload-artifact@v4
+        with:
+          name: static-analysis-reports
+          path: |
+            cppcheck.xml
+            clang-analyzer.txt
+            licenses.json
+            pip-audit.json

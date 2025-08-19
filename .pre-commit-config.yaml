@@ -5,10 +5,33 @@ repos:
         name: clang-format
         entry: clang-format -i
         language: system
-        files: '\.(c|cc|cpp|cxx|h|hh|hpp)$'
+        files: '\\.(c|cc|cpp|cxx|h|hh|hpp)$'
       - id: clang-tidy
         name: clang-tidy
         entry: clang-tidy
         language: system
-        files: '\.(c|cc|cpp|cxx|h|hh|hpp)$'
+        files: '\\.(c|cc|cpp|cxx|h|hh|hpp)$'
         args: ['--config-file=.clang-tidy', '--extra-arg=-Isrc', '--extra-arg=-I.', '--extra-arg=-I/usr/src/googletest/googletest/include']
+      - id: clang-analyzer
+        name: clang-analyzer
+        entry: clang-tidy
+        language: system
+        files: '\\.(c|cc|cpp|cxx|h|hh|hpp)$'
+        args: ['--checks=clang-analyzer-*', '--warnings-as-errors=*', '--extra-arg=-Isrc', '--extra-arg=-I.', '--extra-arg=-I/usr/src/googletest/googletest/include']
+      - id: pip-licenses
+        name: pip-licenses
+        entry: pip-licenses
+        language: system
+        pass_filenames: false
+        args: ['--fail-on=AGPL-3.0']
+  - repo: https://github.com/pre-commit/mirrors-cppcheck
+    rev: v2.12.0
+    hooks:
+      - id: cppcheck
+        args: ['--enable=all', '--inconclusive', '--error-exitcode=1']
+  - repo: https://github.com/pypa/pip-audit
+    rev: v2.9.0
+    hooks:
+      - id: pip-audit
+        args: ['--progress-spinner', 'off']
+        pass_filenames: false
