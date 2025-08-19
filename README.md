@@ -44,6 +44,10 @@ cmake --build build-gpio -j
 Minimal C++17 + CMake project demonstrating a stepper-based shutter,
 parallel hopper, and HX711 scale with a mockable GPIO HAL.
 
+## Architecture
+
+See [docs/architecture.md](docs/architecture.md) for an overview of the HAL, drivers, application logic, HTTP server, and test harness.
+
 ## Native build
 
 ```bash

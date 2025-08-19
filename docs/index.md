@@ -6,3 +6,4 @@ device and are reachable via the `/help` endpoint.
 
 Use the navigation to access specific topics.
 
+- [Architecture Overview](architecture.md)
