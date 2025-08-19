@@ -9,7 +9,7 @@
 #include "server/docs_endpoint.hpp"
 
 struct HttpServer::Impl {
-  httplib::Server server;
+  std::unique_ptr<httplib::Server> server;
   TxnEngine& engine;
   IShutter& shutter;
   IDispenser& dispenser;
@@ -23,25 +23,33 @@ HttpServer::HttpServer(TxnEngine& engine, IShutter& shutter, IDispenser& dispens
 
 HttpServer::~HttpServer() { stop(); }
 
-bool HttpServer::start(const std::string& bind, int port) {
+bool HttpServer::start(const std::string& bind, int port,
+                       const std::string& cert, const std::string& key,
+                       const std::string& token) {
   if (impl_->th.joinable()) return false;
+  auth_key_ = token;
+  if (!cert.empty() && !key.empty()) {
+    impl_->server = std::make_unique<httplib::SSLServer>(cert.c_str(), key.c_str());
+  } else {
+    impl_->server = std::make_unique<httplib::Server>();
+  }
   setup_routes();
   int actual = 0;
   if (port == 0) {
-    actual = impl_->server.bind_to_any_port(bind.c_str());
+    actual = impl_->server->bind_to_any_port(bind.c_str());
     if (actual <= 0) return false;
   } else {
-    if (!impl_->server.bind_to_port(bind.c_str(), port)) return false;
+    if (!impl_->server->bind_to_port(bind.c_str(), port)) return false;
     actual = port;
   }
   port_ = actual;
-  impl_->th = std::thread([this]() { impl_->server.listen_after_bind(); });
-  impl_->server.wait_until_ready();
+  impl_->th = std::thread([this]() { impl_->server->listen_after_bind(); });
+  impl_->server->wait_until_ready();
   return true;
 }
 
 void HttpServer::stop() {
-  impl_->server.stop();
+  if (impl_->server) impl_->server->stop();
   if (impl_->th.joinable()) impl_->th.join();
 }
 
@@ -57,9 +65,31 @@ StatusSnapshot HttpServer::snapshot() {
 }
 
 void HttpServer::setup_routes() {
-  auto& svr = impl_->server;
+  auto& svr = *impl_->server;
   server::register_version_routes(svr);
   server::register_docs_routes(svr);
+
+  if (!auth_key_.empty()) {
+    std::string token = auth_key_;
+    auto basic = "Basic " + [] (const std::string& in) {
+      static const char table[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+      std::string out; int val=0, valb=-6;
+      for (unsigned char c : in) { val = (val<<8) + c; valb += 8; while (valb>=0) { out.push_back(table[(val>>valb)&0x3F]); valb-=6; } }
+      if (valb>-6) out.push_back(table[((val<<8)>>(valb+8))&0x3F]);
+      while (out.size()%4) out.push_back('=');
+      return out;
+    }(":" + token);
+    svr.set_pre_routing_handler([token,basic](const httplib::Request& req, httplib::Response& res) {
+      auto auth = req.get_header_value("Authorization");
+      if (auth == ("Bearer " + token) || auth == basic) {
+        return httplib::Server::HandlerResponse::Unhandled;
+      }
+      res.status = 401;
+      res.set_header("WWW-Authenticate", "Basic realm=\"\"");
+      res.set_content("{\"error\":\"unauthorized\"}", "application/json");
+      return httplib::Server::HandlerResponse::Handled;
+    });
+  }
   svr.Post("/txn", [this](const httplib::Request& req, httplib::Response& res) {
     struct Guard {
       HttpServer* s; bool ok; Guard(HttpServer* s_) : s(s_), ok(s_->busy_try_acquire()) {}

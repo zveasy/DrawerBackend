@@ -28,7 +28,7 @@ Config make_defaults() {
   c.identity = {0,"0x81000001","http://ca.local/sign","/etc/register-mvp/certs","REG"};
   c.safety = {-1,-1,-1,true,10};
   c.service = {true,"1234",3,3,150,2,"data/service.log"};
-  c.pos = {true,9090,""};
+  c.pos = {true,9090,"","",""};
   c.ota = {false, "local", "", "stable", "default", 300, "/var/lib/register-mvp/ota", "", 180, true};
   c.mfg = {1, "file://stdout", "assets/labels/Device_Label.svg", "Acme Retail"};
   c.eol = {0.35,3,40,1500,1,10,"/var/lib/register-mvp/eol"};
@@ -344,6 +344,10 @@ Config load() {
             catch (...) { cfg.pos.port = def; cfg.warnings.push_back(fullkey + " invalid, using default " + std::to_string(def)); }
           } else if (key == "key") {
             cfg.pos.key = value;
+          } else if (key == "tls_cert") {
+            cfg.pos.tls_cert = value;
+          } else if (key == "tls_key") {
+            cfg.pos.tls_key = value;
           } else {
             handled = false;
           }

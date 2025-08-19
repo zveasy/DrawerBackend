@@ -214,7 +214,8 @@ int main(int argc, char** argv) {
       TxnEngine eng(sh, disp, tcfg, &faults);
       if (tcfg.resume_on_start) eng.resume_if_needed();
       HttpServer srv(eng, sh, disp);
-      if (!srv.start("127.0.0.1", api_port)) return 1;
+      if (!srv.start("127.0.0.1", api_port, cfg.pos.tls_cert, cfg.pos.tls_key, cfg.pos.key))
+        return 1;
       std::cout << "API listening on 127.0.0.1:" << srv.port() << std::endl;
       if (run_tui) {
         tui::run(srv.port());
