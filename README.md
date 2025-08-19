@@ -145,3 +145,24 @@ This verifies:
 - Docs `/help` index and `/help/index.html` fallback to Markdown
 - POS `/ping`
 
+
+## Formatting and Linting
+
+This project uses [pre-commit](https://pre-commit.com/) with `clang-format` and `clang-tidy` to keep the C++ codebase consistent and catch common mistakes.
+
+### Setup
+
+```bash
+pip install pre-commit
+pre-commit install
+```
+
+### Usage
+
+Run all checks against the entire repository:
+
+```bash
+pre-commit run --all-files
+```
+
+Pre-commit will automatically format sources and report any issues from `clang-tidy`.

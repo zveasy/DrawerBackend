@@ -1,0 +1,14 @@
+repos:
+  - repo: local
+    hooks:
+      - id: clang-format
+        name: clang-format
+        entry: clang-format -i
+        language: system
+        files: '\.(c|cc|cpp|cxx|h|hh|hpp)$'
+      - id: clang-tidy
+        name: clang-tidy
+        entry: clang-tidy
+        language: system
+        files: '\.(c|cc|cpp|cxx|h|hh|hpp)$'
+        args: ['--config-file=.clang-tidy', '--extra-arg=-Isrc', '--extra-arg=-I.', '--extra-arg=-I/usr/src/googletest/googletest/include']
