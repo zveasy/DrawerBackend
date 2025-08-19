@@ -12,3 +12,23 @@ repos:
         language: system
         files: '\.(c|cc|cpp|cxx|h|hh|hpp)$'
         args: ['--config-file=.clang-tidy', '--extra-arg=-Isrc', '--extra-arg=-I.', '--extra-arg=-I/usr/src/googletest/googletest/include']
+      - id: cppcheck
+        name: cppcheck
+        entry: cppcheck --std=c++17 --enable=all --error-exitcode=1
+        language: system
+        files: '\.(c|cc|cpp|cxx|h|hh|hpp)$'
+      - id: clang-analyzer
+        name: clang-analyzer
+        entry: clang++-18 --analyze -std=c++17 -I. -Isrc
+        language: system
+        files: '\.(c|cc|cpp|cxx|h|hh|hpp)$'
+      - id: pip-audit
+        name: pip-audit
+        entry: bash -c 'if [ -f requirements.txt ]; then pip-audit -r requirements.txt; else echo "no requirements.txt"; fi'
+        language: system
+        pass_filenames: false
+      - id: licensecheck
+        name: licensecheck
+        entry: licensecheck
+        language: system
+        pass_filenames: false
