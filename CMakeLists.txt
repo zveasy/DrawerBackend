@@ -139,6 +139,16 @@ add_library(app
 target_include_directories(app PUBLIC . src)
 target_link_libraries(app PUBLIC drivers hal util safety)
 
+# manufacturing helpers
+add_library(mfg
+  src/eol/eol_spec.cpp
+  src/eol/eol_runner.cpp
+  src/provision/serial.cpp
+  src/burnin/burnin.cpp
+)
+target_include_directories(mfg PUBLIC . src)
+target_link_libraries(mfg PUBLIC app drivers util cfg cloud)
+
 # server / api
 add_library(server
   src/server/http_server.cpp
@@ -200,16 +210,6 @@ if(USE_NLOHMANN_JSON)
   target_compile_definitions(cloud PUBLIC USE_NLOHMANN_JSON=1)
 endif()
 
-# manufacturing helpers
-add_library(mfg
-  src/eol/eol_spec.cpp
-  src/eol/eol_runner.cpp
-  src/provision/serial.cpp
-  src/burnin/burnin.cpp
-)
-target_include_directories(mfg PUBLIC . src)
-target_link_libraries(mfg PUBLIC app drivers util cfg cloud)
-
 # quant
 add_library(quant
   src/quant/ledger.cpp
@@ -233,6 +233,7 @@ target_compile_definitions(register_mvp PRIVATE CPPHTTPLIB_OPENSSL_SUPPORT)
 target_compile_options(register_mvp PRIVATE -UCPPHTTPLIB_USE_CERTS_FROM_MACOSX_KEYCHAIN)
 target_include_directories(register_mvp PRIVATE . src)
 
+include(CTest)
 if(BUILD_TESTING)
   enable_testing()
   add_subdirectory(tests)
