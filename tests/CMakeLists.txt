@@ -243,6 +243,16 @@ endif()
 target_link_libraries(pos_serial_contract_test gtest_main pos)
 gtest_discover_tests(pos_serial_contract_test)
 
+# quant publish hook test
+add_executable(quant_publish_hook_test quant_publish_hook_test.cpp)
+target_include_directories(quant_publish_hook_test PRIVATE .. ../src)
+target_compile_features(quant_publish_hook_test PRIVATE cxx_std_17)
+if (CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+  target_compile_options(quant_publish_hook_test PRIVATE -Wall -Wextra -Wpedantic -O2 -g)
+endif()
+target_link_libraries(quant_publish_hook_test gtest_main pos app drivers hal util quant)
+gtest_discover_tests(quant_publish_hook_test)
+
 add_executable(iot_queue_reconnect_test iot_queue_reconnect_test.cpp)
 target_include_directories(iot_queue_reconnect_test PRIVATE .. ../src)
 target_compile_features(iot_queue_reconnect_test PRIVATE cxx_std_17)

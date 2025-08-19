@@ -213,13 +213,22 @@ target_link_libraries(mfg PUBLIC app drivers util cfg cloud)
 # quant
 add_library(quant
   src/quant/ledger.cpp
+  src/quant/publisher.cpp
 )
 target_include_directories(quant PUBLIC . src)
 target_link_libraries(quant PUBLIC util)
+if(USE_NLOHMANN_JSON)
+  target_link_libraries(quant PUBLIC nlohmann_json::nlohmann_json)
+  target_compile_definitions(quant PUBLIC USE_NLOHMANN_JSON=1)
+endif()
+if(ENABLE_QUANT)
+  target_link_libraries(quant PUBLIC libzmq cppzmq)
+  target_compile_definitions(quant PUBLIC ENABLE_QUANT=1)
+endif()
 
 # main executable
 add_executable(register_mvp src/main.cpp)
-target_link_libraries(register_mvp PRIVATE app drivers hal util cfg server cloud safety pos obs compliance OpenSSL::SSL OpenSSL::Crypto)
+target_link_libraries(register_mvp PRIVATE app drivers hal util cfg server cloud safety pos obs compliance quant OpenSSL::SSL OpenSSL::Crypto)
 target_compile_definitions(register_mvp PRIVATE CPPHTTPLIB_OPENSSL_SUPPORT)
 target_compile_options(register_mvp PRIVATE -UCPPHTTPLIB_USE_CERTS_FROM_MACOSX_KEYCHAIN)
 target_include_directories(register_mvp PRIVATE . src)

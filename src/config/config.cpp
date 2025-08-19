@@ -445,6 +445,53 @@ Config load() {
           } else {
             handled = false;
           }
+        } else if (section == "quant") {
+          handled = true;
+          if (key == "enable") {
+            bool def = cfg.quant.enable;
+            try { cfg.quant.enable = std::stoi(value) != 0; }
+            catch(...) { cfg.quant.enable = def; cfg.warnings.push_back(fullkey+" invalid, using default "+(def?"1":"0")); }
+          } else if (key == "endpoint") {
+            cfg.quant.endpoint = value;
+          } else if (key == "client_id") {
+            cfg.quant.client_id = value;
+          } else if (key == "hmac_key_hex") {
+            cfg.quant.hmac_key_hex = value;
+          } else if (key == "topic") {
+            cfg.quant.topic = value;
+          } else if (key == "queue_dir") {
+            cfg.quant.queue_dir = value;
+          } else if (key == "backoff_ms") {
+            cfg.quant.backoff_ms = value;
+          } else if (key == "heartbeat_seconds") {
+            int def = cfg.quant.heartbeat_seconds;
+            try { cfg.quant.heartbeat_seconds = std::stoi(value); }
+            catch(...) { cfg.quant.heartbeat_seconds = def; cfg.warnings.push_back(fullkey+" invalid, using default "+std::to_string(def)); }
+          } else if (key == "reserve_floor_cents") {
+            int def = cfg.quant.reserve_floor_cents;
+            try { cfg.quant.reserve_floor_cents = std::stoi(value); }
+            catch(...) { cfg.quant.reserve_floor_cents = def; cfg.warnings.push_back(fullkey+" invalid, using default "+std::to_string(def)); }
+          } else if (key == "max_daily_outflow_cents") {
+            int def = cfg.quant.max_daily_outflow_cents;
+            try { cfg.quant.max_daily_outflow_cents = std::stoi(value); }
+            catch(...) { cfg.quant.max_daily_outflow_cents = def; cfg.warnings.push_back(fullkey+" invalid, using default "+std::to_string(def)); }
+          } else if (key == "min_step_change_cents") {
+            int def = cfg.quant.min_step_change_cents;
+            try { cfg.quant.min_step_change_cents = std::stoi(value); }
+            catch(...) { cfg.quant.min_step_change_cents = def; cfg.warnings.push_back(fullkey+" invalid, using default "+std::to_string(def)); }
+          } else if (key == "max_update_rate_hz") {
+            int def = cfg.quant.max_update_rate_hz;
+            try { cfg.quant.max_update_rate_hz = std::stoi(value); }
+            catch(...) { cfg.quant.max_update_rate_hz = def; cfg.warnings.push_back(fullkey+" invalid, using default "+std::to_string(def)); }
+          } else if (key == "tolerance_cents") {
+            int def = cfg.quant.tolerance_cents;
+            try { cfg.quant.tolerance_cents = std::stoi(value); }
+            catch(...) { cfg.quant.tolerance_cents = def; cfg.warnings.push_back(fullkey+" invalid, using default "+std::to_string(def)); }
+          } else if (key == "client_public" || key == "client_secret" || key == "server_public") {
+            // accepted but not stored; avoid unknown warning
+          } else {
+            handled = false;
+          }
         }
       } catch (...) {
         // Should not reach, but guard anyway

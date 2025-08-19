@@ -19,6 +19,7 @@
 #include "pos/http_pos.hpp"
 #include "pos/router.hpp"
 #include "pos/idempotency_store.hpp"
+#include "quant/publisher.hpp"
 #include "ui/tui.hpp"
 #include "cloud/iot_client.hpp"
 #include "cloud/mqtt_loopback.cpp"
@@ -251,7 +252,16 @@ int main(int argc, char** argv) {
       popt.shared_key = cfg.pos.key;
       pos::IdempotencyStore store("/var/lib/register-mvp/pos");
       store.open();
-      pos::Router router(eng, store);
+      std::shared_ptr<quant::Publisher> qp;
+      try {
+        auto qopt = quant::Publisher::from_config(cfg.quant);
+        qp = quant::Publisher::create(qopt);
+      } catch (const std::exception &e) {
+        LOG_WARN("quant_init_err", {{"err", e.what()}});
+      } catch (...) {
+        LOG_WARN("quant_init_err", {{"err", "unknown"}});
+      }
+      pos::Router router(eng, store, qp);
       pos::HttpConnector conn(router, popt);
       if (!conn.start()) return 1;
       std::cout << "POS listening on " << popt.bind << ":" << conn.port() << std::endl;

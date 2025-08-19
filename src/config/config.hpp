@@ -106,6 +106,22 @@ struct BurnInCfg {
   std::string log_path{"/var/log/register-mvp/burnin.jsonl"};
 };
 
+struct Quant {
+  bool enable{false};
+  std::string endpoint;           // e.g. tcp://quant.local:5555
+  std::string client_id{"REG-CLIENT"};
+  std::string hmac_key_hex;       // optional
+  std::string topic{"register/stream"};
+  std::string queue_dir{"/var/lib/register-mvp/quantq"};
+  std::string backoff_ms{"200,400,800,1600,3000"};
+  int heartbeat_seconds{15};
+  int reserve_floor_cents{2000};
+  int max_daily_outflow_cents{50000};
+  int min_step_change_cents{100};
+  int max_update_rate_hz{2};
+  int tolerance_cents{100};
+};
+
 struct Config {
   Pins pins{};
   Mechanics mech{};
@@ -124,6 +140,7 @@ struct Config {
   Manufacturing mfg{};
   EolCfg eol{};
   BurnInCfg burnin{};
+  Quant quant{};
   std::string source_path; // loaded from
   std::vector<std::string> warnings; // invalid keys/values
 };
