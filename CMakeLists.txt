@@ -10,6 +10,7 @@ option(USE_AWS_SDK "Build with AWS IoT CRT MQTT client" OFF)
 option(USE_NLOHMANN_JSON "Use nlohmann/json single header" ON)
 option(ENABLE_SERIAL_POS "Build serial POS connector stub" OFF)
 option(ENABLE_OBSERVABILITY "Enable /metrics endpoints" ON)
+option(ENABLE_QUANT "Enable QuantEngine bridge" OFF)
 
 if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
   add_compile_options(-Wall -Wextra -Wpedantic -O2 -g)
@@ -44,6 +45,16 @@ if(USE_NLOHMANN_JSON)
   FetchContent_MakeAvailable(nlohmann_json)
 endif()
 
+if(ENABLE_QUANT)
+  FetchContent_Declare(libzmq
+    GIT_REPOSITORY https://github.com/zeromq/libzmq.git
+    GIT_TAG v4.3.5)
+  FetchContent_Declare(cppzmq
+    GIT_REPOSITORY https://github.com/zeromq/cppzmq.git
+    GIT_TAG v4.10.0)
+  FetchContent_MakeAvailable(libzmq cppzmq)
+endif()
+
 # util
 add_library(util
   util/log.cpp
@@ -54,6 +65,7 @@ add_library(util
   src/util/event_log.cpp
   src/util/version.cpp
   src/util/ed25519_verify.cpp
+  src/util/crypto_hmac.cpp
 )
 target_include_directories(util PUBLIC . src)
 target_link_libraries(util PUBLIC OpenSSL::Crypto)
@@ -196,6 +208,13 @@ add_library(mfg
 )
 target_include_directories(mfg PUBLIC . src)
 target_link_libraries(mfg PUBLIC app drivers util cfg cloud)
+
+# quant
+add_library(quant
+  src/quant/ledger.cpp
+)
+target_include_directories(quant PUBLIC . src)
+target_link_libraries(quant PUBLIC util)
 
 # main executable
 add_executable(register_mvp src/main.cpp)
