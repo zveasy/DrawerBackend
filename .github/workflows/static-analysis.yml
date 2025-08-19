@@ -1,0 +1,36 @@
+name: Static Analysis
+
+on:
+  pull_request:
+
+jobs:
+  static-analysis:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cppcheck clang-tools
+          pip install licensecheck pip-audit
+      - name: Run cppcheck
+        run: |
+          cppcheck --std=c++17 --enable=all --inconclusive --xml --xml-version=2 src 2> cppcheck.xml
+      - name: Run clang static analyzer
+        run: |
+          scan-build --status-bugs -o clang-analyzer-report make
+      - name: Run pip-audit
+        run: |
+          if [ -f requirements.txt ]; then pip-audit -r requirements.txt -f json -o pip-audit.json; else pip-audit -f json -o pip-audit.json; fi
+      - name: Run licensecheck
+        run: |
+          licensecheck > license-report.txt
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: static-analysis-reports
+          path: |
+            cppcheck.xml
+            clang-analyzer-report
+            license-report.txt
+            pip-audit.json
