@@ -166,3 +166,13 @@ pre-commit run --all-files
 ```
 
 Pre-commit will automatically format sources and report any issues from `clang-tidy`.
+
+## License
+
+This project is licensed under the [MIT License](LICENSE).
+
+Third-party components:
+- [libzmq](https://github.com/zeromq/libzmq) – licensed under [MPL-2.0](https://www.mozilla.org/MPL/2.0/)
+- [cppzmq](https://github.com/zeromq/cppzmq) – licensed under the [MIT License](https://opensource.org/licenses/MIT)
+
+These licenses are compatible with the project's MIT licensing.
