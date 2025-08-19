@@ -17,7 +17,11 @@ class HttpServer {
 public:
   HttpServer(TxnEngine& engine, IShutter& shutter, IDispenser& dispenser);
   ~HttpServer();
-  bool start(const std::string& bind="127.0.0.1", int port=8080);
+  // Start the server. If cert and key paths are provided, HTTPS is used.
+  // Optional token enables Bearer/Basic authentication.
+  bool start(const std::string& bind="127.0.0.1", int port=8080,
+             const std::string& cert="", const std::string& key="",
+             const std::string& token="");
   void stop();
   // for tests
   int port() const { return port_; }
@@ -29,5 +33,6 @@ private:
   // impl
   struct Impl; std::unique_ptr<Impl> impl_;
   std::atomic<bool> in_progress_{false};
+  std::string auth_key_;
   int port_{8080};
 };

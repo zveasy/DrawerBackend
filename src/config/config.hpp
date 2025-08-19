@@ -50,6 +50,8 @@ struct Pos {
   bool enable_http{true};
   int port{9090};
   std::string key;
+  std::string tls_cert; // path to TLS certificate
+  std::string tls_key;  // path to TLS private key
 };
 
 struct Ota {

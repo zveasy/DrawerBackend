@@ -4,6 +4,7 @@
 #include "contracts.hpp"
 #include "idempotency_store.hpp"
 #include "../app/txn_engine.hpp"
+#include <memory>
 
 namespace quant { class Publisher; }
 
