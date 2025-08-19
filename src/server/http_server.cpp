@@ -3,6 +3,7 @@
 #include <sstream>
 #include <algorithm>
 #include <chrono>
+#include <nlohmann/json.hpp>
 #include "obs/metrics.hpp"
 #include "server/version_endpoint.hpp"
 #include "server/docs_endpoint.hpp"
@@ -55,22 +56,6 @@ StatusSnapshot HttpServer::snapshot() {
   return s;
 }
 
-static bool get_int_field(const std::string& body, const std::string& key, int& value) {
-  auto pos = body.find("\"" + key + "\"");
-  if (pos == std::string::npos) return false;
-  pos = body.find(':', pos);
-  if (pos == std::string::npos) return false;
-  pos = body.find_first_of("-0123456789", pos + 1);
-  if (pos == std::string::npos) return false;
-  size_t end = body.find_first_not_of("0123456789-", pos);
-  try {
-    value = std::stoi(body.substr(pos, end - pos));
-  } catch (...) {
-    return false;
-  }
-  return true;
-}
-
 void HttpServer::setup_routes() {
   auto& svr = impl_->server;
   server::register_version_routes(svr);
@@ -86,8 +71,11 @@ void HttpServer::setup_routes() {
       return;
     }
     int price=0, deposit=0;
-    if (!get_int_field(req.body, "price", price) ||
-        !get_int_field(req.body, "deposit", deposit)) {
+    try {
+      auto j = nlohmann::json::parse(req.body);
+      price = j.at("price").get<int>();
+      deposit = j.at("deposit").get<int>();
+    } catch (...) {
       res.status = 400;
       res.set_content("{\"error\":\"bad\"}", "application/json");
       return;
@@ -118,9 +106,18 @@ void HttpServer::setup_routes() {
 
   svr.Post("/command", [this](const httplib::Request& req, httplib::Response& res) {
     int val=0;
-    const auto& body = req.body;
-    if (body.find("\"close\"") != std::string::npos) {
-      if (!get_int_field(body, "close", val)) {
+    nlohmann::json j;
+    try {
+      j = nlohmann::json::parse(req.body);
+    } catch (...) {
+      res.status = 400;
+      res.set_content("{\"ok\":false,\"reason\":\"bad\"}", "application/json");
+      return;
+    }
+    if (j.contains("close")) {
+      try {
+        val = j.at("close").get<int>();
+      } catch (...) {
         res.status = 400;
         res.set_content("{\"ok\":false,\"reason\":\"bad\"}", "application/json");
         return;
@@ -135,8 +132,10 @@ void HttpServer::setup_routes() {
       res.set_content("{\"error\":\"busy\"}", "application/json");
       return;
     }
-    if (body.find("\"open\"") != std::string::npos) {
-      if (!get_int_field(body, "open", val)) {
+    if (j.contains("open")) {
+      try {
+        val = j.at("open").get<int>();
+      } catch (...) {
         res.status = 400;
         res.set_content("{\"ok\":false,\"reason\":\"bad\"}", "application/json");
         return;
@@ -146,8 +145,10 @@ void HttpServer::setup_routes() {
       res.set_content("{\"ok\":true}", "application/json");
       return;
     }
-    if (body.find("\"dispense\"") != std::string::npos) {
-      if (!get_int_field(body, "dispense", val)) {
+    if (j.contains("dispense")) {
+      try {
+        val = j.at("dispense").get<int>();
+      } catch (...) {
         res.status = 400;
         res.set_content("{\"ok\":false,\"reason\":\"bad\"}", "application/json");
         return;
