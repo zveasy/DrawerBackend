@@ -1,0 +1,332 @@
+name: Compose CI
+
+on:
+  pull_request:
+  push:
+    branches: [ main ]
+  schedule:
+    - cron: '0 7 * * 1'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  packages: write
+  security-events: write
+
+jobs:
+  unit-tests:
+    timeout-minutes: 20
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        compiler: [gcc, clang]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install build deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential cmake pkg-config libgpiod-dev libssl-dev ca-certificates ccache
+
+      - name: Cache ccache
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.ccache
+          key: ccache-${{ runner.os }}-${{ matrix.compiler }}-${{ hashFiles('**/CMakeLists.txt', '**/*.cmake') }}
+          restore-keys: |
+            ccache-${{ runner.os }}-${{ matrix.compiler }}-
+
+      - name: Configure (BUILD_TESTING=ON)
+        env:
+          CC: ${{ matrix.compiler == 'clang' && 'clang' || 'gcc' }}
+          CXX: ${{ matrix.compiler == 'clang' && 'clang++' || 'g++' }}
+        run: |
+          cmake -S . -B build -DBUILD_TESTING=ON -DUSE_MOCK_GPIO=ON \
+            -DCMAKE_C_COMPILER_LAUNCHER=ccache \
+            -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
+
+      - name: Build
+        run: |
+          cmake --build build -j
+
+      - name: Run unit tests
+        run: |
+          ctest --test-dir build --output-on-failure
+  build-and-healthcheck:
+    timeout-minutes: 20
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate docker-compose
+        run: docker compose config -q
+
+      - name: Set up QEMU (multi-arch)
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to GHCR (main branch)
+        if: github.ref == 'refs/heads/main'
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Show Docker versions
+        run: |
+          docker --version
+          docker compose version
+
+      - name: Build images with BuildKit cache
+        uses: docker/bake-action@v5
+        with:
+          files: |
+            ./docker-bake.hcl
+            ./docker-compose.yml
+          set: |
+            *.cache-from=type=gha
+            *.cache-to=type=gha,mode=max
+            *.labels=org.opencontainers.image.revision=${{ github.sha }}
+            *.labels=org.opencontainers.image.source=https://github.com/${{ github.repository }}
+          targets: |
+            api
+            pos
+            api_tui
+
+      - name: Vulnerability scan (api)
+        uses: anchore/scan-action@v4
+        with:
+          image: register_mvp-api:local
+          output-format: sarif
+          output-file: anchore-api.sarif
+          fail-build: false
+          severity-cutoff: high
+
+      - name: Upload SARIF (api)
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: anchore-api.sarif
+
+      - name: Vulnerability scan (pos)
+        uses: anchore/scan-action@v4
+        with:
+          image: register_mvp-pos:local
+          output-format: sarif
+          output-file: anchore-pos.sarif
+          fail-build: false
+          severity-cutoff: high
+
+      - name: Upload SARIF (pos)
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: anchore-pos.sarif
+
+      - name: Vulnerability scan (api_tui)
+        uses: anchore/scan-action@v4
+        with:
+          image: register_mvp-api_tui:local
+          output-format: sarif
+          output-file: anchore-api_tui.sarif
+          fail-build: false
+          severity-cutoff: high
+
+      - name: Upload SARIF (api_tui)
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: anchore-api_tui.sarif
+
+      - name: Generate SBOM (api)
+        uses: anchore/sbom-action@v0
+        with:
+          image: register_mvp-api:local
+          format: spdx-json
+          output-file: sbom-api.spdx.json
+
+      - name: Generate SBOM (pos)
+        uses: anchore/sbom-action@v0
+        with:
+          image: register_mvp-pos:local
+          format: spdx-json
+          output-file: sbom-pos.spdx.json
+
+      - name: Generate SBOM (api_tui)
+        uses: anchore/sbom-action@v0
+        with:
+          image: register_mvp-api_tui:local
+          format: spdx-json
+          output-file: sbom-api_tui.spdx.json
+
+      - name: Upload SBOM artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: sboms
+          path: |
+            sbom-api.spdx.json
+            sbom-pos.spdx.json
+            sbom-api_tui.spdx.json
+
+      - name: Push images to GHCR (main branch)
+        if: github.ref == 'refs/heads/main'
+        uses: docker/bake-action@v5
+        with:
+          files: |
+            ./docker-bake.hcl
+            ./docker-compose.yml
+          set: |
+            *.cache-from=type=gha
+            *.cache-to=type=gha,mode=max
+            api.tags=ghcr.io/${{ github.repository }}-api:${{ github.sha }}
+            api.push=true
+            pos.tags=ghcr.io/${{ github.repository }}-pos:${{ github.sha }}
+            pos.push=true
+            api_tui.tags=ghcr.io/${{ github.repository }}-api_tui:${{ github.sha }}
+            api_tui.push=true
+          targets: |
+            api
+            pos
+            api_tui
+
+      - name: Push latest tags to GHCR (main branch and schedule)
+        if: github.ref == 'refs/heads/main'
+        uses: docker/bake-action@v5
+        with:
+          files: |
+            ./docker-bake.hcl
+            ./docker-compose.yml
+          set: |
+            *.cache-from=type=gha
+            *.cache-to=type=gha,mode=max
+            api.tags=ghcr.io/${{ github.repository }}-api:latest
+            api.push=true
+            pos.tags=ghcr.io/${{ github.repository }}-pos:latest
+            pos.push=true
+            api_tui.tags=ghcr.io/${{ github.repository }}-api_tui:latest
+            api_tui.push=true
+          targets: |
+            api
+            pos
+            api_tui
+
+      - name: Start services (no rebuild)
+        env:
+          LOG_JSON: "1"
+          BIND_ADDR: "0.0.0.0"
+          API_PORT: "8080"
+          POS_PORT: "9090"
+          DOCS_PORT: "8082"
+          API_TUI_PORT: "8081"
+        run: |
+          docker compose up -d --no-build api pos docs api_tui
+
+      - name: Wait for health
+        run: |
+          set -e
+          services=(api pos docs api_tui)
+          for s in "${services[@]}"; do
+            echo "Waiting for $s to be healthy..."
+            for i in {1..60}; do
+              status=$(docker inspect --format='{{json .State.Health.Status}}' "drawerbackend-${s}-1" | tr -d '"') || status=starting
+              echo "$s: $status"
+              if [ "$status" = "healthy" ]; then
+                break
+              fi
+              if [ $i -eq 60 ]; then
+                echo "Service $s failed to become healthy" >&2
+                exit 1
+              fi
+              sleep 2
+            done
+          done
+
+      - name: Curl endpoints
+        run: |
+          curl -fsS http://localhost:8080/status | head -c 200 >/dev/null
+          curl -fsS http://localhost:9090/ping | head -c 200 >/dev/null
+          curl -fsS http://localhost:8082/ | head -c 200 >/dev/null
+          curl -fsS http://localhost:8081/status | head -c 200 >/dev/null
+
+      - name: Compose logs on failure
+        if: failure()
+        run: |
+          docker compose ps
+          docker compose logs --no-color | tee compose-logs.txt
+
+      - name: Upload compose logs (artifact)
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: compose-logs-build-health
+          path: compose-logs.txt
+
+      - name: Tear down
+        if: always()
+        run: |
+          docker compose down -v
+
+  docs-prod-check:
+    timeout-minutes: 15
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate docker-compose
+        run: docker compose config -q
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build docs (prod profile)
+        env:
+          DOCS_PORT: "8082"
+        run: |
+          docker compose --profile prod up docs_build
+
+      - name: Export built docs site artifact
+        run: |
+          # Volume name follows default compose project naming (folder-based)
+          docker run --rm -v drawerbackend_docs_site:/site -v "$GITHUB_WORKSPACE":/out alpine sh -c "cd /site && tar czf /out/docs_site.tgz ."
+      
+      - name: Upload docs artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: docs_site
+          path: docs_site.tgz
+
+      - name: Serve built docs and verify
+        env:
+          DOCS_PORT: "8082"
+        run: |
+          docker compose --profile prod up -d docs_prod
+          # wait for container health (leverages docs_prod healthcheck)
+          for i in {1..60}; do
+            status=$(docker inspect --format='{{json .State.Health.Status}}' "drawerbackend-docs_prod-1" | tr -d '"') || status=starting
+            echo "docs_prod: $status"
+            if [ "$status" = "healthy" ]; then break; fi
+            if [ $i -eq 60 ]; then echo "docs_prod failed to become healthy" >&2; exit 1; fi
+            sleep 2
+          done
+          # final HTTP verification
+          curl -fsS http://localhost:${DOCS_PORT}/ | head -c 200 >/dev/null
+
+      - name: Compose logs on failure
+        if: failure()
+        run: |
+          docker compose ps
+          docker compose logs --no-color
+
+      - name: Tear down prod docs
+        if: always()
+        run: |
+          docker compose --profile prod down -v

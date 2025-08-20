@@ -192,6 +192,8 @@ int main(int argc, char** argv) {
     }
 
     if (run_api) {
+      const char* ba = std::getenv("BIND_ADDR");
+      std::string bind_addr = ba ? std::string(ba) : std::string("127.0.0.1");
       Stepper step(*chip, cfg.pins.step, cfg.pins.dir, cfg.pins.enable,
                    cfg.pins.limit_open, cfg.pins.limit_closed,
                    cfg.mech.steps_per_mm, 400, 80);
@@ -214,9 +216,9 @@ int main(int argc, char** argv) {
       TxnEngine eng(sh, disp, tcfg, &faults);
       if (tcfg.resume_on_start) eng.resume_if_needed();
       HttpServer srv(eng, sh, disp);
-      if (!srv.start("127.0.0.1", api_port, cfg.pos.tls_cert, cfg.pos.tls_key, cfg.pos.key))
+      if (!srv.start(bind_addr.c_str(), api_port, cfg.pos.tls_cert, cfg.pos.tls_key, cfg.pos.key))
         return 1;
-      std::cout << "API listening on 127.0.0.1:" << srv.port() << std::endl;
+      std::cout << "API listening on " << bind_addr << ":" << srv.port() << std::endl;
       if (run_tui) {
         tui::run(srv.port());
         srv.stop();
@@ -227,6 +229,8 @@ int main(int argc, char** argv) {
     }
 
     if (pos_http) {
+      const char* ba = std::getenv("BIND_ADDR");
+      std::string bind_addr = ba ? std::string(ba) : std::string("127.0.0.1");
       Stepper step(*chip, cfg.pins.step, cfg.pins.dir, cfg.pins.enable,
                    cfg.pins.limit_open, cfg.pins.limit_closed,
                    cfg.mech.steps_per_mm, 400, 80);
@@ -251,6 +255,7 @@ int main(int argc, char** argv) {
       pos::Options popt;
       popt.port = pos_port;
       popt.shared_key = cfg.pos.key;
+      popt.bind = bind_addr;
       pos::IdempotencyStore store("/var/lib/register-mvp/pos");
       store.open();
       std::shared_ptr<quant::Publisher> qp;

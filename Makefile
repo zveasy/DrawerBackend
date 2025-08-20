@@ -4,6 +4,7 @@
 
 BUILD_DIR := build
 CONFIG_FLAGS := -DCMAKE_BUILD_TYPE=RelWithDebInfo
+DOCS_PORT ?= 8082
 
 configure:
 	cmake -S . -B $(BUILD_DIR) $(CONFIG_FLAGS)
@@ -51,4 +52,37 @@ rebuild:
  clean-build:
 	rm -rf $(BUILD_DIR)
 
-.PHONY: configure build rebuild test dev-up dev-down api docs pos tui tail-logs smoke clean-build
+# Docker Compose helpers
+compose-up:
+	docker compose up -d
+
+compose-down:
+	docker compose down -v
+
+compose-dev:
+	docker compose --profile dev up -d
+
+compose-dev-down:
+	docker compose --profile dev down -v
+
+docs-prod:
+	docker compose --profile prod up docs_build
+	docker compose --profile prod up -d docs_prod
+
+docs-prod-down:
+	docker compose --profile prod down -v
+
+# Validation & quick checks
+compose-validate:
+	docker compose config -q
+
+docs-prod-test:
+	docker compose --profile prod up docs_build
+	docker compose --profile prod up -d docs_prod
+	for i in `seq 1 30`; do if curl -fsS http://localhost:$(DOCS_PORT)/ >/dev/null 2>&1; then echo OK; break; fi; sleep 1; done
+	curl -fsS http://localhost:$(DOCS_PORT)/ | head -c 200 >/dev/null
+
+docs-prod-logs:
+	docker compose logs --no-color docs_prod
+
+.PHONY: configure build rebuild test dev-up dev-down api docs pos tui tail-logs smoke clean-build compose-up compose-down compose-dev compose-dev-down docs-prod docs-prod-down compose-validate docs-prod-test docs-prod-logs

@@ -1,4 +1,79 @@
 
+## Docker Compose profiles
+
+We ship a profile-based `docker-compose.yml` for local dev and production-like docs serving.
+
+- **dev profile**: `drawerbackend`, `docs` (live MkDocs), `api_tui`
+  - Start: `docker compose --profile dev up -d`
+  - Stop: `docker compose --profile dev down -v`
+
+- **prod profile (docs pipeline)**: `docs_build` (MkDocs build) ➜ `docs_prod` (NGINX)
+  - Build site: `docker compose --profile prod up docs_build`
+  - Serve site: `docker compose --profile prod up -d docs_prod`
+  - Visit: `http://localhost:${DOCS_PORT}` (defaults to 8082)
+
+Notes:
+- `docs_prod` uses `nginx:alpine` with custom config at `packaging/nginx/docs.conf`.
+- Built site is stored in named volume `docs_site`.
+- Healthchecks are enabled for API, POS, and docs.
+
+## Makefile shortcuts
+
+Common Compose flows are wrapped in the `Makefile`:
+
+```bash
+# Validate docker-compose.yml
+make compose-validate
+
+# Dev profile up/down
+make compose-dev
+make compose-dev-down
+
+# Prod docs pipeline (build + serve)
+make docs-prod
+make docs-prod-down
+
+# One-shot prod docs test with curl verification (override port if needed)
+DOCS_PORT=18082 make docs-prod-test
+
+# Inspect logs
+make docs-prod-logs
+```
+
+## CI overview
+
+GitHub Actions workflow `.github/workflows/compose-ci.yml`:
+
+- **build-and-healthcheck**
+  - Build images with BuildKit + GHA cache using `docker/bake-action`.
+  - Multi-arch cross-build (amd64, arm64) via QEMU + Buildx.
+  - Start `api`, `pos`, `docs` (dev), `api_tui` with `--no-build`.
+  - Wait for health and curl endpoints.
+  - On `main`, logs in to GHCR and conditionally pushes images tagged with commit SHA.
+  - Generates SBOMs (SPDX JSON) for built images and uploads as artifacts.
+  - Runs container vulnerability scans and uploads SARIF to GitHub Code Scanning.
+
+- **docs-prod-check**
+  - Run `docs_build` to produce the site into `docs_site` volume.
+  - Export the built site as an artifact (`docs_site.tgz`).
+  - Start `docs_prod` and wait for container health, then curl home page.
+
+The workflow uses concurrency control and job timeouts to keep CI responsive.
+
+- Nightly/weekly scheduling: runs weekly via cron to refresh caches and publish latest tags.
+- Unit tests run in a matrix across GCC and Clang.
+  - Ccache is enabled for faster incremental CI builds.
+
+## Built images (optional publishing)
+
+On the `main` branch, images are pushed to GHCR with tags:
+
+- `ghcr.io/<org>/<repo>-api:<sha>`
+- `ghcr.io/<org>/<repo>-pos:<sha>`
+- `ghcr.io/<org>/<repo>-api_tui:<sha>`
+
+You can pull those in other pipelines or environments if needed (requires GHCR auth).
+
 # register_mvp
 
 Sprint 1 & 2 — Repo, HAL, Sim Harness, and Shutter FSM.

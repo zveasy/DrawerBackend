@@ -1,0 +1,10 @@
+.git
+build/
+build-*/
+cmake-build-*/
+.qodo/
+.vscode/
+.idea/
+.DS_Store
+logs/
+*.log
