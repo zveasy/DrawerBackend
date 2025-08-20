@@ -4,10 +4,12 @@
 #include <algorithm>
 #include <chrono>
 #include <mutex>
+#include <string>
 #include <nlohmann/json.hpp>
 #include "obs/metrics.hpp"
 #include "server/version_endpoint.hpp"
 #include "server/docs_endpoint.hpp"
+#include "util/log.hpp"
 
 struct HttpServer::Impl {
   std::unique_ptr<httplib::Server> server;
@@ -116,16 +118,28 @@ void HttpServer::setup_routes() {
   }
   svr.set_pre_routing_handler([this, token, basic](const httplib::Request& req,
                                                   httplib::Response& res) {
+    auto log_err = [&](const std::string& reason) {
+      if (req.path == "/txn" || req.path == "/command") {
+        auto lvl = res.status >= 500 ? util::LogLevel::Error : util::LogLevel::Warn;
+        util::log(lvl, "http_error",
+                  {{"src", req.remote_addr},
+                   {"route", req.path},
+                   {"status", std::to_string(res.status)},
+                   {"reason", reason}});
+      }
+    };
     if (req.path == "/txn") {
       if (!impl_->txn_limiter.allow()) {
         res.status = 429;
         res.set_content("{\"error\":\"rate\"}", "application/json");
+        log_err("rate");
         return httplib::Server::HandlerResponse::Handled;
       }
     } else if (req.path == "/command") {
       if (!impl_->cmd_limiter.allow()) {
         res.status = 429;
         res.set_content("{\"error\":\"rate\"}", "application/json");
+        log_err("rate");
         return httplib::Server::HandlerResponse::Handled;
       }
     }
@@ -137,6 +151,7 @@ void HttpServer::setup_routes() {
       res.status = 401;
       res.set_header("WWW-Authenticate", "Basic realm=\"\"");
       res.set_content("{\"error\":\"unauthorized\"}", "application/json");
+      log_err("unauthorized");
       return httplib::Server::HandlerResponse::Handled;
     }
     return httplib::Server::HandlerResponse::Unhandled;
@@ -153,6 +168,11 @@ void HttpServer::setup_routes() {
     if (!guard.ok) {
       res.status = 409;
       res.set_content("{\"error\":\"busy\"}", "application/json");
+      util::log(util::LogLevel::Warn, "http_error",
+                {{"src", req.remote_addr},
+                 {"route", req.path},
+                 {"status", std::to_string(res.status)},
+                 {"reason", "busy"}});
       return;
     }
     int price = 0, deposit = 0;
@@ -163,6 +183,11 @@ void HttpServer::setup_routes() {
     } catch (...) {
       res.status = 400;
       res.set_content("{\"error\":\"bad\"}", "application/json");
+      util::log(util::LogLevel::Warn, "http_error",
+                {{"src", req.remote_addr},
+                 {"route", req.path},
+                 {"status", std::to_string(res.status)},
+                 {"reason", "bad_json"}});
       return;
     }
     price = std::clamp(price, 0, 100000);
@@ -194,6 +219,11 @@ void HttpServer::setup_routes() {
     } catch (...) {
       res.status = 400;
       res.set_content("{\"ok\":false,\"reason\":\"bad\"}", "application/json");
+      util::log(util::LogLevel::Warn, "http_error",
+                {{"src", req.remote_addr},
+                 {"route", req.path},
+                 {"status", std::to_string(res.status)},
+                 {"reason", "bad_json"}});
       return;
     }
     if (j.contains("close")) {
@@ -202,6 +232,11 @@ void HttpServer::setup_routes() {
       } catch (...) {
         res.status = 400;
         res.set_content("{\"ok\":false,\"reason\":\"bad\"}", "application/json");
+        util::log(util::LogLevel::Warn, "http_error",
+                  {{"src", req.remote_addr},
+                   {"route", req.path},
+                   {"status", std::to_string(res.status)},
+                   {"reason", "bad_request"}});
         return;
       }
       val = std::clamp(val, 0, 1000);
@@ -212,6 +247,11 @@ void HttpServer::setup_routes() {
     if (in_progress_.load()) {
       res.status = 409;
       res.set_content("{\"error\":\"busy\"}", "application/json");
+      util::log(util::LogLevel::Warn, "http_error",
+                {{"src", req.remote_addr},
+                 {"route", req.path},
+                 {"status", std::to_string(res.status)},
+                 {"reason", "busy"}});
       return;
     }
     if (j.contains("open")) {
@@ -220,6 +260,11 @@ void HttpServer::setup_routes() {
       } catch (...) {
         res.status = 400;
         res.set_content("{\"ok\":false,\"reason\":\"bad\"}", "application/json");
+        util::log(util::LogLevel::Warn, "http_error",
+                  {{"src", req.remote_addr},
+                   {"route", req.path},
+                   {"status", std::to_string(res.status)},
+                   {"reason", "bad_request"}});
         return;
       }
       val = std::clamp(val, 0, 1000);
@@ -233,6 +278,11 @@ void HttpServer::setup_routes() {
       } catch (...) {
         res.status = 400;
         res.set_content("{\"ok\":false,\"reason\":\"bad\"}", "application/json");
+        util::log(util::LogLevel::Warn, "http_error",
+                  {{"src", req.remote_addr},
+                   {"route", req.path},
+                   {"status", std::to_string(res.status)},
+                   {"reason", "bad_request"}});
         return;
       }
       val = std::clamp(val, 0, 1000);
@@ -242,6 +292,11 @@ void HttpServer::setup_routes() {
     }
     res.status = 400;
     res.set_content("{\"ok\":false,\"reason\":\"bad\"}", "application/json");
+    util::log(util::LogLevel::Warn, "http_error",
+              {{"src", req.remote_addr},
+               {"route", req.path},
+               {"status", std::to_string(res.status)},
+               {"reason", "bad_request"}});
   });
 
   svr.Get("/metrics", [token, basic](const httplib::Request& req, httplib::Response& res) {
