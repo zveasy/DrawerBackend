@@ -3,6 +3,7 @@
 #include "../src/server/http_server.hpp"
 #include <httplib.h>
 #include "ssl_helpers.hpp"
+#include <cstdlib>
 
 struct FakeShutter : IShutter {
   bool home(int, std::string*) override { return true; }
@@ -122,30 +123,60 @@ TEST_P(HttpHandlers, MalformedJson) {
   if (tls) write_test_cert(std::filesystem::temp_directory_path() / "httptest2", cert, key);
   HttpServer srv(eng, sh, disp);
   ASSERT_TRUE(tls ? srv.start("127.0.0.1", 0, cert, key) : srv.start("127.0.0.1", 0));
+  setenv("LOG_JSON", "1", 1);
   if (tls) {
     httplib::SSLClient cli("127.0.0.1", srv.port());
     cli.enable_server_certificate_verification(false);
+    testing::internal::CaptureStdout();
     auto bad_txn = cli.Post("/txn", "not json", "application/json");
+    std::string log_txn = testing::internal::GetCapturedStdout();
     ASSERT_TRUE(bad_txn);
     EXPECT_EQ(400, bad_txn->status);
+    EXPECT_NE(log_txn.find("\"route\":\"/txn\""), std::string::npos);
+    EXPECT_NE(log_txn.find("\"reason\":\"bad_json\""), std::string::npos);
+
+    testing::internal::CaptureStdout();
     auto bad_cmd = cli.Post("/command", "{\"open\":\"bad\"}", "application/json");
+    std::string log_cmd = testing::internal::GetCapturedStdout();
     ASSERT_TRUE(bad_cmd);
     EXPECT_EQ(400, bad_cmd->status);
+    EXPECT_NE(log_cmd.find("\"route\":\"/command\""), std::string::npos);
+    EXPECT_NE(log_cmd.find("\"reason\":\"bad_request\""), std::string::npos);
+
+    testing::internal::CaptureStdout();
     auto bad_cmd2 = cli.Post("/command", "not json", "application/json");
+    std::string log_cmd2 = testing::internal::GetCapturedStdout();
     ASSERT_TRUE(bad_cmd2);
     EXPECT_EQ(400, bad_cmd2->status);
+    EXPECT_NE(log_cmd2.find("\"route\":\"/command\""), std::string::npos);
+    EXPECT_NE(log_cmd2.find("\"reason\":\"bad_json\""), std::string::npos);
   } else {
     httplib::Client cli("127.0.0.1", srv.port());
+    testing::internal::CaptureStdout();
     auto bad_txn = cli.Post("/txn", "not json", "application/json");
+    std::string log_txn = testing::internal::GetCapturedStdout();
     ASSERT_TRUE(bad_txn);
     EXPECT_EQ(400, bad_txn->status);
+    EXPECT_NE(log_txn.find("\"route\":\"/txn\""), std::string::npos);
+    EXPECT_NE(log_txn.find("\"reason\":\"bad_json\""), std::string::npos);
+
+    testing::internal::CaptureStdout();
     auto bad_cmd = cli.Post("/command", "{\"open\":\"bad\"}", "application/json");
+    std::string log_cmd = testing::internal::GetCapturedStdout();
     ASSERT_TRUE(bad_cmd);
     EXPECT_EQ(400, bad_cmd->status);
+    EXPECT_NE(log_cmd.find("\"route\":\"/command\""), std::string::npos);
+    EXPECT_NE(log_cmd.find("\"reason\":\"bad_request\""), std::string::npos);
+
+    testing::internal::CaptureStdout();
     auto bad_cmd2 = cli.Post("/command", "not json", "application/json");
+    std::string log_cmd2 = testing::internal::GetCapturedStdout();
     ASSERT_TRUE(bad_cmd2);
     EXPECT_EQ(400, bad_cmd2->status);
+    EXPECT_NE(log_cmd2.find("\"route\":\"/command\""), std::string::npos);
+    EXPECT_NE(log_cmd2.find("\"reason\":\"bad_json\""), std::string::npos);
   }
+  setenv("LOG_JSON", "0", 1);
 
   srv.stop();
 }
