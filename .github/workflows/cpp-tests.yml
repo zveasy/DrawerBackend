@@ -12,10 +12,33 @@ jobs:
     steps:
       - uses: actions/checkout@v3
       - name: Install dependencies
-        run: sudo apt-get update && sudo apt-get install -y cmake g++
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake g++ lcov gcovr
       - name: Configure
-        run: cmake -S . -B build -DBUILD_TESTING=ON
+        run: |
+          cmake -S . -B build -DBUILD_TESTING=ON -DCMAKE_BUILD_TYPE=Debug \
+            -DCMAKE_CXX_FLAGS="--coverage" -DCMAKE_EXE_LINKER_FLAGS="--coverage"
       - name: Build
         run: cmake --build build -j
       - name: Test
         run: ctest --test-dir build --output-on-failure
+      - name: Collect coverage
+        run: |
+          mkdir coverage
+          lcov --capture --directory build --output-file coverage/coverage.info
+          lcov --remove coverage/coverage.info '/usr/*' --output-file coverage/coverage.info
+          gcovr --root . --object-directory build --xml-pretty --output coverage/coverage.xml --html-details coverage/coverage.html --print-summary --fail-under-line 60
+      - name: Upload coverage artifacts
+        uses: actions/upload-artifact@v3
+        with:
+          name: coverage
+          path: coverage
+      - name: Upload coverage to Codecov
+        if: ${{ secrets.CODECOV_TOKEN != '' }}
+        uses: codecov/codecov-action@v3
+        with:
+          files: coverage/coverage.info
+          fail_ci_if_error: false
+        env:
+          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
