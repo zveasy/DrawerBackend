@@ -3,6 +3,7 @@
 #include <sstream>
 #include <algorithm>
 #include <chrono>
+#include <mutex>
 #include <nlohmann/json.hpp>
 #include "obs/metrics.hpp"
 #include "server/version_endpoint.hpp"
@@ -15,6 +16,31 @@ struct HttpServer::Impl {
   IDispenser& dispenser;
   std::thread th;
   Impl(TxnEngine& e, IShutter& s, IDispenser& d) : engine(e), shutter(s), dispenser(d) {}
+  struct RateLimiter {
+    double capacity;
+    double tokens;
+    double refill_per_sec;
+    std::chrono::steady_clock::time_point last;
+    std::mutex m;
+    RateLimiter(double cap, double refill)
+        : capacity(cap), tokens(cap), refill_per_sec(refill),
+          last(std::chrono::steady_clock::now()) {}
+    bool allow() {
+      std::lock_guard<std::mutex> lk(m);
+      auto now = std::chrono::steady_clock::now();
+      double elapsed =
+          std::chrono::duration<double>(now - last).count();
+      tokens = std::min(capacity, tokens + elapsed * refill_per_sec);
+      last = now;
+      if (tokens >= 1.0) {
+        tokens -= 1.0;
+        return true;
+      }
+      return false;
+    }
+  };
+  RateLimiter txn_limiter{4.0, 0.1};
+  RateLimiter cmd_limiter{4.0, 0.1};
 };
 
 HttpServer::HttpServer(TxnEngine& engine, IShutter& shutter, IDispenser& dispenser)
@@ -87,18 +113,34 @@ void HttpServer::setup_routes() {
       while (out.size() % 4) out.push_back('=');
       return out;
     }(":" + token);
-    svr.set_pre_routing_handler(
-        [token, basic](const httplib::Request& req, httplib::Response& res) {
-          auto auth = req.get_header_value("Authorization");
-          if (auth == ("Bearer " + token) || auth == basic) {
-            return httplib::Server::HandlerResponse::Unhandled;
-          }
-          res.status = 401;
-          res.set_header("WWW-Authenticate", "Basic realm=\"\"");
-          res.set_content("{\"error\":\"unauthorized\"}", "application/json");
-          return httplib::Server::HandlerResponse::Handled;
-        });
   }
+  svr.set_pre_routing_handler([this, token, basic](const httplib::Request& req,
+                                                  httplib::Response& res) {
+    if (req.path == "/txn") {
+      if (!impl_->txn_limiter.allow()) {
+        res.status = 429;
+        res.set_content("{\"error\":\"rate\"}", "application/json");
+        return httplib::Server::HandlerResponse::Handled;
+      }
+    } else if (req.path == "/command") {
+      if (!impl_->cmd_limiter.allow()) {
+        res.status = 429;
+        res.set_content("{\"error\":\"rate\"}", "application/json");
+        return httplib::Server::HandlerResponse::Handled;
+      }
+    }
+    if (!token.empty()) {
+      auto auth = req.get_header_value("Authorization");
+      if (auth == ("Bearer " + token) || auth == basic) {
+        return httplib::Server::HandlerResponse::Unhandled;
+      }
+      res.status = 401;
+      res.set_header("WWW-Authenticate", "Basic realm=\"\"");
+      res.set_content("{\"error\":\"unauthorized\"}", "application/json");
+      return httplib::Server::HandlerResponse::Handled;
+    }
+    return httplib::Server::HandlerResponse::Unhandled;
+  });
   svr.Post("/txn", [this](const httplib::Request& req, httplib::Response& res) {
     struct Guard {
       HttpServer* s;
