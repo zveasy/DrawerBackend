@@ -69,6 +69,48 @@ TEST_P(HttpHandlers, BasicFlow) {
   srv.stop();
 }
 
+TEST_P(HttpHandlers, RateLimit) {
+  bool tls = GetParam();
+  std::filesystem::remove_all("data");
+  FakeShutter sh;
+  FakeDispenser disp;
+  TxnConfig cfg;
+  TxnEngine eng(sh, disp, cfg);
+  std::string cert, key;
+  if (tls) write_test_cert(std::filesystem::temp_directory_path() / "httptest_rl", cert, key);
+  HttpServer srv(eng, sh, disp);
+  ASSERT_TRUE(tls ? srv.start("127.0.0.1", 0, cert, key) : srv.start("127.0.0.1", 0));
+  if (tls) {
+    httplib::SSLClient cli("127.0.0.1", srv.port());
+    cli.enable_server_certificate_verification(false);
+    httplib::Result r;
+    for (int i = 0; i < 10; ++i) {
+      r = cli.Post("/txn", "{\"price\":1,\"deposit\":1}", "application/json");
+      ASSERT_TRUE(r);
+    }
+    EXPECT_EQ(429, r->status);
+    for (int i = 0; i < 10; ++i) {
+      r = cli.Post("/command", "{\"dispense\":1}", "application/json");
+      ASSERT_TRUE(r);
+    }
+    EXPECT_EQ(429, r->status);
+  } else {
+    httplib::Client cli("127.0.0.1", srv.port());
+    httplib::Result r;
+    for (int i = 0; i < 10; ++i) {
+      r = cli.Post("/txn", "{\"price\":1,\"deposit\":1}", "application/json");
+      ASSERT_TRUE(r);
+    }
+    EXPECT_EQ(429, r->status);
+    for (int i = 0; i < 10; ++i) {
+      r = cli.Post("/command", "{\"dispense\":1}", "application/json");
+      ASSERT_TRUE(r);
+    }
+    EXPECT_EQ(429, r->status);
+  }
+  srv.stop();
+}
+
 TEST_P(HttpHandlers, MalformedJson) {
   bool tls = GetParam();
   std::filesystem::remove_all("data");
