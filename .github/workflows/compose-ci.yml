@@ -17,6 +17,18 @@ permissions:
   security-events: write
 
 jobs:
+  hardening-check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Apply hardening
+        run: scripts/hardening/apply_hardening.sh
+
+      - name: Verify hardening
+        run: scripts/hardening/verify_hardening.sh
+
   unit-tests:
     timeout-minutes: 20
     runs-on: ubuntu-latest
