@@ -67,6 +67,7 @@ add_library(util
   src/util/version.cpp
   src/util/ed25519_verify.cpp
   src/util/crypto_hmac.cpp
+  src/util/cli_options.cpp
 )
 target_include_directories(util PUBLIC . src)
 target_link_libraries(util PUBLIC OpenSSL::Crypto)
