@@ -29,6 +29,7 @@
 #include "obs/metrics.hpp"
 #include "compliance/compliance_mode.hpp"
 #include "util/cli_options.hpp"
+#include "util/version.hpp"
 
 #include <cstdlib>
 #include <iostream>
@@ -221,7 +222,8 @@ int main(int argc, char** argv) {
     cfg::Config cfg = lr.config;
     obs::M().gauge("register_device_up", "Device up").set(1);
     obs::M()
-        .gauge("register_build_info", "Build info", {{"version", "1.0.0"}, {"git", "unknown"}})
+        .gauge("register_build_info", "Build info",
+               {{"version", appver::version()}, {"git", appver::git()}})
         .set(1);
     eventlog::Logger elog(cfg.service.audit_path);
     safety::FaultManager faults(cfg.safety, &elog);
