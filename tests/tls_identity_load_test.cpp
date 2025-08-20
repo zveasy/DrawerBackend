@@ -4,6 +4,7 @@
 #include <filesystem>
 #include <fstream>
 #include <sys/stat.h>
+#include <cstdlib>
 
 TEST(TlsIdentity, LoadAndPerms) {
   cfg::Config c = cfg::defaults();
@@ -16,8 +17,10 @@ TEST(TlsIdentity, LoadAndPerms) {
     std::ofstream ce(cert); ce << "c";
   }
   chmod(key.c_str(), 0600);
-  c.aws.key = key;
-  c.aws.cert = cert;
+  setenv("AWS_KEY_TEST", key.c_str(), 1);
+  setenv("AWS_CERT_TEST", cert.c_str(), 1);
+  c.aws.key.env = "AWS_KEY_TEST";
+  c.aws.cert.env = "AWS_CERT_TEST";
   c.identity.use_tpm = false;
   EXPECT_NO_THROW(cloud::TlsIdentity::load_from_config(c));
   chmod(key.c_str(), 0644);

@@ -6,8 +6,26 @@
 #include <unordered_map>
 #include <unordered_set>
 #include <functional>
+#include <thread>
+#include <chrono>
 
 namespace cfg {
+
+std::string SecretRef::load() const {
+  const char* v = std::getenv(env.c_str());
+  return v ? std::string(v) : std::string{};
+}
+
+void Aws::schedule_rotation(const std::function<void()>& refresh) const {
+  if (rotation_check_minutes <= 0) return;
+  std::thread([interval = rotation_check_minutes, refresh]() {
+    using namespace std::chrono;
+    while (true) {
+      std::this_thread::sleep_for(minutes(interval));
+      refresh();
+    }
+  }).detach();
+}
 
 namespace {
 
@@ -21,9 +39,9 @@ Config make_defaults() {
   c.pres = {2000};
   c.st = {true};
   c.aws = {false, "", "REG-01", "REG-01",
-           "/etc/register-mvp/certs/AmazonRootCA1.pem",
-           "/etc/register-mvp/certs/device.pem.crt",
-           "/etc/register-mvp/certs/private.pem.key",
+           {"AWS_ROOT_CA"},
+           {"AWS_CERT"},
+           {"AWS_KEY"},
            "register/REG-01", 1, "data/awsq", 8ull<<20, 0, 60};
   c.security = {1,1,1,"192.0.2.0/24",1,"registermvp"};
   c.identity = {0,"0x81000001","http://ca.local/sign","/etc/register-mvp/certs","REG"};
@@ -144,9 +162,9 @@ void parse_aws(const json& j, Config& cfg, Errors& err) {
     STRING_FIELD(aws, endpoint),
     STRING_FIELD(aws, thing_name),
     STRING_FIELD(aws, client_id),
-    STRING_FIELD(aws, root_ca),
-    STRING_FIELD(aws, cert),
-    STRING_FIELD(aws, key),
+    {"root_ca_env", [](Config& c, const json& v, const std::string& fk, Errors& e){ if(!v.is_string()) e.push_back(fk+" must be string"); else c.aws.root_ca.env = v.get<std::string>(); }},
+    {"cert_env", [](Config& c, const json& v, const std::string& fk, Errors& e){ if(!v.is_string()) e.push_back(fk+" must be string"); else c.aws.cert.env = v.get<std::string>(); }},
+    {"key_env", [](Config& c, const json& v, const std::string& fk, Errors& e){ if(!v.is_string()) e.push_back(fk+" must be string"); else c.aws.key.env = v.get<std::string>(); }},
     STRING_FIELD(aws, topic_prefix),
     INT_FIELD(aws, qos),
     STRING_FIELD(aws, queue_dir),
@@ -334,6 +352,14 @@ LoadResult load() {
     "io","mechanics","hopper","dispense","audit","presentation","selftest","aws","security","identity","safety","service","pos","ota","manufacturing","eol","burnin","quant"};
   for (auto& [k, _] : j.items()) {
     if (!known.count(k)) res.errors.push_back("unknown section " + k);
+  }
+
+  if (res.config.aws.enable) {
+    res.config.aws.schedule_rotation([aws = res.config.aws]() {
+      (void)aws.root_ca.load();
+      (void)aws.cert.load();
+      (void)aws.key.load();
+    });
   }
 
   return res;

@@ -17,3 +17,11 @@ fi
 chmod 600 "$KEY"
 chmod 644 "$CERT"
 echo "device_id=$(hostname)" > /etc/opt/register-mvp/identity
+
+ENV_FILE=/etc/register-mvp/secrets.env
+cat > "$ENV_FILE" <<EOF
+AWS_ROOT_CA=$CERT_DIR/AmazonRootCA1.pem
+AWS_CERT=$CERT
+AWS_KEY=$KEY
+EOF
+chmod 600 "$ENV_FILE"
