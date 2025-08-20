@@ -8,3 +8,10 @@ Dependencies are managed via CMake `FetchContent`:
 
 Both are fetched at configure time when the QuantEngine bridge
 is enabled (`ENABLE_QUANT` option).
+
+## Licenses
+
+- libzmq is licensed under [MPL-2.0](https://www.mozilla.org/MPL/2.0/).
+- cppzmq is licensed under the [MIT License](https://opensource.org/licenses/MIT).
+
+Both licenses are compatible with the project's MIT License.
