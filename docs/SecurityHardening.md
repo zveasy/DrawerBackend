@@ -7,3 +7,4 @@ This document outlines the baseline hardening applied to the device.
 * SSH key-only authentication
 * nftables firewall deny-by-default
 * auditd rules for key files
+* Metrics endpoints require authentication
