@@ -14,8 +14,7 @@ struct HttpServer::Impl {
   IShutter& shutter;
   IDispenser& dispenser;
   std::thread th;
-  Impl(TxnEngine& e, IShutter& s, IDispenser& d)
-      : engine(e), shutter(s), dispenser(d) {}
+  Impl(TxnEngine& e, IShutter& s, IDispenser& d) : engine(e), shutter(s), dispenser(d) {}
 };
 
 HttpServer::HttpServer(TxnEngine& engine, IShutter& shutter, IDispenser& dispenser)
@@ -23,9 +22,8 @@ HttpServer::HttpServer(TxnEngine& engine, IShutter& shutter, IDispenser& dispens
 
 HttpServer::~HttpServer() { stop(); }
 
-bool HttpServer::start(const std::string& bind, int port,
-                       const std::string& cert, const std::string& key,
-                       const std::string& token) {
+bool HttpServer::start(const std::string& bind, int port, const std::string& cert,
+                       const std::string& key, const std::string& token) {
   if (impl_->th.joinable()) return false;
   auth_key_ = token;
   if (!cert.empty() && !key.empty()) {
@@ -69,38 +67,53 @@ void HttpServer::setup_routes() {
   server::register_version_routes(svr);
   server::register_docs_routes(svr);
 
-  if (!auth_key_.empty()) {
-    std::string token = auth_key_;
-    auto basic = "Basic " + [] (const std::string& in) {
-      static const char table[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-      std::string out; int val=0, valb=-6;
-      for (unsigned char c : in) { val = (val<<8) + c; valb += 8; while (valb>=0) { out.push_back(table[(val>>valb)&0x3F]); valb-=6; } }
-      if (valb>-6) out.push_back(table[((val<<8)>>(valb+8))&0x3F]);
-      while (out.size()%4) out.push_back('=');
+  std::string token = auth_key_;
+  std::string basic;
+  if (!token.empty()) {
+    basic = "Basic " + [](const std::string& in) {
+      static const char table[] =
+          "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+      std::string out;
+      int val = 0, valb = -6;
+      for (unsigned char c : in) {
+        val = (val << 8) + c;
+        valb += 8;
+        while (valb >= 0) {
+          out.push_back(table[(val >> valb) & 0x3F]);
+          valb -= 6;
+        }
+      }
+      if (valb > -6) out.push_back(table[((val << 8) >> (valb + 8)) & 0x3F]);
+      while (out.size() % 4) out.push_back('=');
       return out;
     }(":" + token);
-    svr.set_pre_routing_handler([token,basic](const httplib::Request& req, httplib::Response& res) {
-      auto auth = req.get_header_value("Authorization");
-      if (auth == ("Bearer " + token) || auth == basic) {
-        return httplib::Server::HandlerResponse::Unhandled;
-      }
-      res.status = 401;
-      res.set_header("WWW-Authenticate", "Basic realm=\"\"");
-      res.set_content("{\"error\":\"unauthorized\"}", "application/json");
-      return httplib::Server::HandlerResponse::Handled;
-    });
+    svr.set_pre_routing_handler(
+        [token, basic](const httplib::Request& req, httplib::Response& res) {
+          auto auth = req.get_header_value("Authorization");
+          if (auth == ("Bearer " + token) || auth == basic) {
+            return httplib::Server::HandlerResponse::Unhandled;
+          }
+          res.status = 401;
+          res.set_header("WWW-Authenticate", "Basic realm=\"\"");
+          res.set_content("{\"error\":\"unauthorized\"}", "application/json");
+          return httplib::Server::HandlerResponse::Handled;
+        });
   }
   svr.Post("/txn", [this](const httplib::Request& req, httplib::Response& res) {
     struct Guard {
-      HttpServer* s; bool ok; Guard(HttpServer* s_) : s(s_), ok(s_->busy_try_acquire()) {}
-      ~Guard() { if (ok) s->busy_release(); }
+      HttpServer* s;
+      bool ok;
+      Guard(HttpServer* s_) : s(s_), ok(s_->busy_try_acquire()) {}
+      ~Guard() {
+        if (ok) s->busy_release();
+      }
     } guard(this);
     if (!guard.ok) {
       res.status = 409;
       res.set_content("{\"error\":\"busy\"}", "application/json");
       return;
     }
-    int price=0, deposit=0;
+    int price = 0, deposit = 0;
     try {
       auto j = nlohmann::json::parse(req.body);
       price = j.at("price").get<int>();
@@ -114,12 +127,9 @@ void HttpServer::setup_routes() {
     deposit = std::clamp(deposit, 0, 100000);
     auto t = impl_->engine.run_purchase(price, deposit);
     std::ostringstream oss;
-    oss << "{\"id\":\"" << t.id << "\",\"price\":" << t.price
-        << ",\"deposit\":" << t.deposit
-        << ",\"change\":" << t.change
-        << ",\"quarters\":" << t.quarters
-        << ",\"status\":\"" << (t.phase=="DONE"?"OK":"VOID")
-        << "\",\"reason\":\"" << t.reason << "\"}";
+    oss << "{\"id\":\"" << t.id << "\",\"price\":" << t.price << ",\"deposit\":" << t.deposit
+        << ",\"change\":" << t.change << ",\"quarters\":" << t.quarters << ",\"status\":\""
+        << (t.phase == "DONE" ? "OK" : "VOID") << "\",\"reason\":\"" << t.reason << "\"}";
     res.set_content(oss.str(), "application/json");
   });
 
@@ -128,14 +138,14 @@ void HttpServer::setup_routes() {
     bool has_last = !snap.last.id.empty();
     std::string last_json = has_last ? journal::to_json(snap.last) : std::string("{}");
     std::ostringstream oss;
-    oss << "{\"in_progress\":" << (snap.in_progress?"true":"false")
-        << ",\"last\":" << (has_last?last_json:"{}")
-        << ",\"version\":\"" << snap.version << "\"}";
+    oss << "{\"in_progress\":" << (snap.in_progress ? "true" : "false")
+        << ",\"last\":" << (has_last ? last_json : "{}") << ",\"version\":\"" << snap.version
+        << "\"}";
     res.set_content(oss.str(), "application/json");
   });
 
   svr.Post("/command", [this](const httplib::Request& req, httplib::Response& res) {
-    int val=0;
+    int val = 0;
     nlohmann::json j;
     try {
       j = nlohmann::json::parse(req.body);
@@ -192,12 +202,32 @@ void HttpServer::setup_routes() {
     res.set_content("{\"ok\":false,\"reason\":\"bad\"}", "application/json");
   });
 
-  svr.Get("/metrics", [](const httplib::Request&, httplib::Response& res){
-    std::ostringstream oss; obs::M().to_prometheus(oss);
+  svr.Get("/metrics", [token, basic](const httplib::Request& req, httplib::Response& res) {
+    if (!token.empty()) {
+      auto auth = req.get_header_value("Authorization");
+      if (auth != ("Bearer " + token) && auth != basic) {
+        res.status = 401;
+        res.set_header("WWW-Authenticate", "Basic realm=\"\"");
+        res.set_content("{\"error\":\"unauthorized\"}", "application/json");
+        return;
+      }
+    }
+    std::ostringstream oss;
+    obs::M().to_prometheus(oss);
     res.set_content(oss.str(), "text/plain");
   });
-  svr.Get("/metrics.json", [](const httplib::Request&, httplib::Response& res){
-    std::ostringstream oss; obs::M().to_json(oss);
+  svr.Get("/metrics.json", [token, basic](const httplib::Request& req, httplib::Response& res) {
+    if (!token.empty()) {
+      auto auth = req.get_header_value("Authorization");
+      if (auth != ("Bearer " + token) && auth != basic) {
+        res.status = 401;
+        res.set_header("WWW-Authenticate", "Basic realm=\"\"");
+        res.set_content("{\"error\":\"unauthorized\"}", "application/json");
+        return;
+      }
+    }
+    std::ostringstream oss;
+    obs::M().to_json(oss);
     res.set_content(oss.str(), "application/json");
   });
 }
