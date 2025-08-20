@@ -1,44 +1,104 @@
 name: Release
 
 on:
-  workflow_dispatch:
-    inputs:
-      version:
-        description: 'Version tag (e.g., v1.2.3)'
-        required: true
-      changelog:
-        description: 'Release notes'
-        required: false
+  push:
+    tags:
+      - 'v*'
 
 permissions:
   contents: write
+  packages: write
 
 jobs:
   release:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
+      - name: Extract tag
+        id: vars
+        run: echo "tag=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+
+      - name: Install build deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential cmake pkg-config libgpiod-dev libssl-dev ca-certificates
+
+      - name: Configure
+        run: |
+          cmake -S . -B build -DAPP_VERSION=${{ steps.vars.outputs.tag }} -DCMAKE_BUILD_TYPE=Release
+
+      - name: Build binary
+        run: cmake --build build --target register_mvp --config Release
+
+      - name: Package binary
+        run: tar -czf register_mvp-${{ steps.vars.outputs.tag }}.tar.gz -C build register_mvp
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
         with:
-          fetch-depth: 0
-      - name: Configure Git
-        run: |
-          git config user.name "github-actions"
-          git config user.email "github-actions@github.com"
-      - name: Tag release
-        run: |
-          git tag ${{ inputs.version }}
-          git push origin ${{ inputs.version }}
-      - name: Build
-        run: |
-          cmake -S . -B build -DAPP_VERSION=${{ inputs.version }}
-          cmake --build build --target register_mvp --config Release
-      - name: Package artifact
-        run: |
-          tar -czf register_mvp-${{ inputs.version }}.tar.gz -C build register_mvp
-      - name: Publish release
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push images
+        uses: docker/bake-action@v5
+        with:
+          files: |
+            ./docker-bake.hcl
+            ./docker-compose.yml
+          set: |
+            TAG=${{ steps.vars.outputs.tag }}
+            *.cache-from=type=gha
+            *.cache-to=type=gha,mode=max
+            *.labels=org.opencontainers.image.revision=${{ github.sha }}
+            *.labels=org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            api.tags=ghcr.io/${{ github.repository }}-api:${{ steps.vars.outputs.tag }}
+            api.push=true
+            pos.tags=ghcr.io/${{ github.repository }}-pos:${{ steps.vars.outputs.tag }}
+            pos.push=true
+            api_tui.tags=ghcr.io/${{ github.repository }}-api_tui:${{ steps.vars.outputs.tag }}
+            api_tui.push=true
+          targets: |
+            api
+            pos
+            api_tui
+
+      - name: Generate SBOM (api)
+        uses: anchore/sbom-action@v0
+        with:
+          image: ghcr.io/${{ github.repository }}-api:${{ steps.vars.outputs.tag }}
+          format: spdx-json
+          output-file: sbom-api.spdx.json
+
+      - name: Generate SBOM (pos)
+        uses: anchore/sbom-action@v0
+        with:
+          image: ghcr.io/${{ github.repository }}-pos:${{ steps.vars.outputs.tag }}
+          format: spdx-json
+          output-file: sbom-pos.spdx.json
+
+      - name: Generate SBOM (api_tui)
+        uses: anchore/sbom-action@v0
+        with:
+          image: ghcr.io/${{ github.repository }}-api_tui:${{ steps.vars.outputs.tag }}
+          format: spdx-json
+          output-file: sbom-api_tui.spdx.json
+
+      - name: Create GitHub Release
         uses: softprops/action-gh-release@v1
         with:
-          tag_name: ${{ inputs.version }}
-          name: ${{ inputs.version }}
-          body: ${{ inputs.changelog }}
-          files: register_mvp-${{ inputs.version }}.tar.gz
+          tag_name: ${{ steps.vars.outputs.tag }}
+          name: ${{ steps.vars.outputs.tag }}
+          files: |
+            register_mvp-${{ steps.vars.outputs.tag }}.tar.gz
+            sbom-api.spdx.json
+            sbom-pos.spdx.json
+            sbom-api_tui.spdx.json
