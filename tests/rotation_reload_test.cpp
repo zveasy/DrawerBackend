@@ -4,6 +4,7 @@
 #include <filesystem>
 #include <fstream>
 #include <sys/stat.h>
+#include <cstdlib>
 
 TEST(Rotation, ReloadCert) {
   cfg::Config c = cfg::defaults();
@@ -16,7 +17,9 @@ TEST(Rotation, ReloadCert) {
   chmod(key.c_str(), 0600);
   {
     std::ofstream ce(cert); ce << "cert1"; }
-  c.aws.key = key; c.aws.cert = cert; c.identity.use_tpm = false;
+  setenv("AWS_KEY_ROT", key.c_str(), 1);
+  setenv("AWS_CERT_ROT", cert.c_str(), 1);
+  c.aws.key.env = "AWS_KEY_ROT"; c.aws.cert.env = "AWS_CERT_ROT"; c.identity.use_tpm = false;
   auto c1 = cloud::TlsIdentity::load_from_config(c);
   {
     std::ofstream ce(cert); ce << "cert2"; }

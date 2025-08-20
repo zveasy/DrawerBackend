@@ -2,8 +2,14 @@
 #include <string>
 #include <vector>
 #include <cstdint>
+#include <functional>
 
 namespace cfg {
+
+struct SecretRef {
+  std::string env;
+  std::string load() const;
+};
 
 struct Pins { int step,dir,enable,limit_open,limit_closed,hopper_en,hopper_pulse,hx_dt,hx_sck; };
 struct Mechanics { int steps_per_mm, open_mm, max_mm; };
@@ -17,15 +23,16 @@ struct Aws {
   std::string endpoint;
   std::string thing_name;
   std::string client_id;
-  std::string root_ca;
-  std::string cert;
-  std::string key;
+  SecretRef root_ca;
+  SecretRef cert;
+  SecretRef key;
   std::string topic_prefix;
   int qos{1};
   std::string queue_dir{"data/awsq"};
   uint64_t max_queue_bytes{8ull<<20};
   bool use_tls_identity{0};
   int rotation_check_minutes{60};
+  void schedule_rotation(const std::function<void()>& refresh) const;
 };
 
 struct Safety {

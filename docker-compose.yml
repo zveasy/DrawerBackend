@@ -11,6 +11,10 @@ services:
       - ./logs:/logs
     working_dir: /workspace/DrawerBackend
     command: sleep infinity
+    environment:
+      - AWS_ROOT_CA=${AWS_ROOT_CA}
+      - AWS_CERT=${AWS_CERT}
+      - AWS_KEY=${AWS_KEY}
     devices:
       - "/dev/gpiochip0:/dev/gpiochip0"
     logging:
@@ -84,6 +88,9 @@ services:
     environment:
       - LOG_JSON=${LOG_JSON}
       - BIND_ADDR=${BIND_ADDR}
+      - AWS_ROOT_CA=${AWS_ROOT_CA}
+      - AWS_CERT=${AWS_CERT}
+      - AWS_KEY=${AWS_KEY}
     command: ["./build/register_mvp", "--api", "${API_PORT}"]
     ports:
       - "${API_PORT}:${API_PORT}"
@@ -111,6 +118,9 @@ services:
     environment:
       - LOG_JSON=${LOG_JSON}
       - BIND_ADDR=${BIND_ADDR}
+      - AWS_ROOT_CA=${AWS_ROOT_CA}
+      - AWS_CERT=${AWS_CERT}
+      - AWS_KEY=${AWS_KEY}
     command: ["./build/register_mvp", "--pos-http", "${POS_PORT}"]
     ports:
       - "${POS_PORT}:${POS_PORT}"
@@ -139,6 +149,9 @@ services:
     environment:
       - LOG_JSON=${LOG_JSON}
       - BIND_ADDR=${BIND_ADDR}
+      - AWS_ROOT_CA=${AWS_ROOT_CA}
+      - AWS_CERT=${AWS_CERT}
+      - AWS_KEY=${AWS_KEY}
     command: ["./build/register_mvp", "--api", "${API_TUI_PORT}", "--tui"]
     ports:
       - "${API_TUI_PORT}:${API_TUI_PORT}"
