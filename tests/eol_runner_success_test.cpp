@@ -23,7 +23,9 @@ struct MockScale : IScale {
 };
 
 TEST(EolRunner, Success) {
-  cfg::Config cfg = cfg::load();
+  auto lr = cfg::load();
+  ASSERT_TRUE(lr.errors.empty());
+  cfg::Config cfg = lr.config;
   cfg.eol.result_dir = "eol_tmp";
   std::filesystem::remove_all(cfg.eol.result_dir);
   MockShutter sh; MockDisp disp; MockScale sc;

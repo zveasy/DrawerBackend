@@ -19,7 +19,9 @@ struct BadScale : IScale {
 };
 
 TEST(EolRunner, WeightFail) {
-  cfg::Config cfg = cfg::load();
+  auto lr = cfg::load();
+  ASSERT_TRUE(lr.errors.empty());
+  cfg::Config cfg = lr.config;
   cfg.eol.result_dir = "eol_tmp2";
   std::filesystem::remove_all(cfg.eol.result_dir);
   MockShutter2 sh; MockDisp2 disp; BadScale sc;

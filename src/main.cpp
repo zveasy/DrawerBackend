@@ -96,7 +96,14 @@ int main(int argc, char** argv) {
   }
 
   try {
-    cfg::Config cfg = cfg::load();
+    auto lr = cfg::load();
+    if (!lr.errors.empty()) {
+      for (const auto& e : lr.errors) {
+        std::cerr << "Config error: " << e << std::endl;
+      }
+      return 1;
+    }
+    cfg::Config cfg = lr.config;
     obs::M().gauge("register_device_up", "Device up").set(1);
     obs::M().gauge("register_build_info", "Build info", {{"version","1.0.0"},{"git","unknown"}}).set(1);
     eventlog::Logger elog(cfg.service.audit_path);

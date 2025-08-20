@@ -3,7 +3,9 @@
 #include <regex>
 
 TEST(Serial, FormatAndSequence) {
-  cfg::Config cfg = cfg::load();
+  auto lr = cfg::load();
+  ASSERT_TRUE(lr.errors.empty());
+  cfg::Config cfg = lr.config;
   std::time_t fake = 1700000000; // fixed time
   setenv("PLANT_CODE","P1",1);
   std::string s1 = provision::make_serial(cfg, fake);

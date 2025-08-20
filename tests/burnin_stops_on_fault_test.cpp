@@ -4,7 +4,9 @@
 #include <filesystem>
 
 TEST(Burnin, StopsOnFault) {
-  cfg::Config cfg = cfg::load();
+  auto lr = cfg::load();
+  ASSERT_TRUE(lr.errors.empty());
+  cfg::Config cfg = lr.config;
   cfg.burnin.cycles = 10;
   cfg.burnin.log_path = "burnin.log";
   std::filesystem::remove(cfg.burnin.log_path);
