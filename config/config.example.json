@@ -1,0 +1,144 @@
+{
+  "io": {
+    "pins": {
+      "step": 23,
+      "dir": 24,
+      "enable": 25,
+      "limit_open": 26,
+      "limit_closed": 27,
+      "hopper_en": 5,
+      "hopper_pulse": 6,
+      "hx_dt": 19,
+      "hx_sck": 13
+    }
+  },
+  "mechanics": {
+    "steps_per_mm": 40,
+    "open_mm": 40,
+    "max_mm": 80
+  },
+  "hopper": {
+    "pulses_per_coin": 1,
+    "min_edge_interval_us": 2000
+  },
+  "dispense": {
+    "jam_ms": 600,
+    "settle_ms": 120,
+    "max_ms_per_coin": 300,
+    "hard_timeout_ms": 5000
+  },
+  "audit": {
+    "coin_mass_g": 5.670,
+    "tolerance_per_coin_g": 0.35,
+    "grams_per_raw": 0.001,
+    "tare_raw": 0,
+    "samples_pre": 8,
+    "samples_post": 8,
+    "settle_ms": 200,
+    "stuck_epsilon_raw": 3
+  },
+  "presentation": { "present_ms": 2000 },
+  "selftest": { "enable_coin_test": true },
+  "aws": {
+    "enable": false,
+    "endpoint": "",
+    "thing_name": "REG-01",
+    "client_id": "REG-01",
+    "root_ca": "/etc/register-mvp/certs/AmazonRootCA1.pem",
+    "cert": "/etc/register-mvp/certs/device.pem.crt",
+    "key": "/etc/register-mvp/certs/private.pem.key",
+    "topic_prefix": "register/REG-01",
+    "qos": 1,
+    "queue_dir": "data/awsq",
+    "max_queue_bytes": 8388608,
+    "use_tls_identity": false,
+    "rotation_check_minutes": 60
+  },
+  "security": {
+    "enable_ro_root": true,
+    "ssh_keys_only": true,
+    "firewall_enable": true,
+    "allow_ssh_from": "192.0.2.0/24",
+    "auditd_enable": true,
+    "service_user": "registermvp"
+  },
+  "identity": {
+    "use_tpm": false,
+    "tpm_parent_handle": "0x81000001",
+    "ca_endpoint": "http://ca.local/sign",
+    "cert_dir": "/etc/register-mvp/certs",
+    "device_id_prefix": "REG"
+  },
+  "safety": {
+    "estop_pin": -1,
+    "lid_tamper_pin": -1,
+    "overcurrent_pin": -1,
+    "active_high": true,
+    "debounce_ms": 10
+  },
+  "service": {
+    "enable": true,
+    "pin_code": "1234",
+    "jam_clear_shutter_mm": 3,
+    "jam_clear_cycles": 3,
+    "hopper_nudge_ms": 150,
+    "hopper_max_retries": 2,
+    "audit_path": "data/service.log"
+  },
+  "pos": {
+    "enable_http": true,
+    "port": 9090,
+    "key": "",
+    "tls_cert": "",
+    "tls_key": ""
+  },
+  "ota": {
+    "enable": false,
+    "backend": "local",
+    "feed_url": "",
+    "channel": "stable",
+    "ring": "default",
+    "poll_seconds": 300,
+    "state_dir": "/var/lib/register-mvp/ota",
+    "key_pub": "",
+    "health_grace_seconds": 180,
+    "require_signed": true
+  },
+  "manufacturing": {
+    "enable_first_boot_eol": true,
+    "label_printer_uri": "file://stdout",
+    "label_template": "assets/labels/Device_Label.svg",
+    "company_name": "Acme Retail"
+  },
+  "eol": {
+    "weigh_tolerance_g": 0.35,
+    "coins_for_test": 3,
+    "open_mm": 40,
+    "present_ms": 1500,
+    "retries": 1,
+    "min_success_txn_visible_seconds": 10,
+    "result_dir": "/var/lib/register-mvp/eol"
+  },
+  "burnin": {
+    "cycles": 500,
+    "rest_ms": 250,
+    "abort_on_fault": true,
+    "log_path": "/var/log/register-mvp/burnin.jsonl"
+  },
+  "quant": {
+    "enable": false,
+    "endpoint": "",
+    "client_id": "REG-CLIENT",
+    "hmac_key_hex": "",
+    "topic": "register/stream",
+    "queue_dir": "/var/lib/register-mvp/quantq",
+    "backoff_ms": "200,400,800,1600,3000",
+    "heartbeat_seconds": 15,
+    "reserve_floor_cents": 2000,
+    "max_daily_outflow_cents": 50000,
+    "min_step_change_cents": 100,
+    "max_update_rate_hz": 2,
+    "tolerance_cents": 100
+  }
+}
+

@@ -3,23 +3,27 @@
 #include <fstream>
 #include <cstdio>
 #include <cstdlib>
+#include <nlohmann/json.hpp>
 
 TEST(Config, DefaultsApplied) {
   unsetenv("REGISTER_MVP_CONFIG");
-  auto c = cfg::load();
+  auto lr = cfg::load();
+  ASSERT_TRUE(lr.errors.empty());
+  const auto& c = lr.config;
   const auto& d = cfg::defaults();
   EXPECT_EQ(c.mech.steps_per_mm, d.mech.steps_per_mm);
   EXPECT_EQ(c.pins.step, d.pins.step);
 }
 
 TEST(Config, PartialMerge) {
-  std::string path = "test_partial.ini";
-  {
-    std::ofstream f(path);
-    f << "[mechanics]\nsteps_per_mm=200\n";
-  }
+  std::string path = "test_partial.json";
+  nlohmann::json j;
+  j["mechanics"]["steps_per_mm"] = 200;
+  std::ofstream(path) << j.dump();
   setenv("REGISTER_MVP_CONFIG", path.c_str(), 1);
-  auto c = cfg::load();
+  auto lr = cfg::load();
+  ASSERT_TRUE(lr.errors.empty());
+  const auto& c = lr.config;
   const auto& d = cfg::defaults();
   EXPECT_EQ(c.mech.steps_per_mm, 200);
   EXPECT_EQ(c.mech.open_mm, d.mech.open_mm);
@@ -28,18 +32,16 @@ TEST(Config, PartialMerge) {
 }
 
 TEST(Config, InvalidValueWarning) {
-  std::string path = "test_invalid.ini";
-  {
-    std::ofstream f(path);
-    f << "[mechanics]\nsteps_per_mm=abc\n";
-  }
+  std::string path = "test_invalid.json";
+  nlohmann::json j;
+  j["mechanics"]["steps_per_mm"] = "abc";
+  std::ofstream(path) << j.dump();
   setenv("REGISTER_MVP_CONFIG", path.c_str(), 1);
-  auto c = cfg::load();
-  const auto& d = cfg::defaults();
-  EXPECT_EQ(c.mech.steps_per_mm, d.mech.steps_per_mm);
+  auto lr = cfg::load();
+  EXPECT_FALSE(lr.errors.empty());
   bool found=false;
-  for (const auto& w : c.warnings) {
-    if (w.find("mechanics.steps_per_mm") != std::string::npos) found = true;
+  for (const auto& e : lr.errors) {
+    if (e.find("mechanics.steps_per_mm") != std::string::npos) found = true;
   }
   EXPECT_TRUE(found);
   unsetenv("REGISTER_MVP_CONFIG");
@@ -47,30 +49,32 @@ TEST(Config, InvalidValueWarning) {
 }
 
 TEST(Config, OverridesAllSections) {
-  std::string path = "test_overrides.ini";
-  {
-    std::ofstream f(path);
-    f << "[io.pins]\nstep=1\n";
-    f << "[mechanics]\nsteps_per_mm=200\n";
-    f << "[hopper]\npulses_per_coin=2\n";
-    f << "[dispense]\njam_ms=111\n";
-    f << "[audit]\ncoin_mass_g=1.23\n";
-    f << "[presentation]\npresent_ms=333\n";
-    f << "[selftest]\nenable_coin_test=0\n";
-    f << "[aws]\nenable=1\nendpoint=http://example\n";
-    f << "[security]\nenable_ro_root=1\n";
-    f << "[identity]\nuse_tpm=1\n";
-    f << "[safety]\nestop_pin=5\n";
-    f << "[service]\nenable=0\n";
-    f << "[pos]\nenable_http=0\n";
-    f << "[ota]\nenable=1\n";
-    f << "[manufacturing]\nenable_first_boot_eol=0\n";
-    f << "[eol]\nweigh_tolerance_g=0.5\n";
-    f << "[burnin]\ncycles=1000\n";
-    f << "[quant]\nenable=1\n";
-  }
+  std::string path = "test_overrides.json";
+  nlohmann::json j;
+  j["io"]["pins"]["step"] = 1;
+  j["mechanics"]["steps_per_mm"] = 200;
+  j["hopper"]["pulses_per_coin"] = 2;
+  j["dispense"]["jam_ms"] = 111;
+  j["audit"]["coin_mass_g"] = 1.23;
+  j["presentation"]["present_ms"] = 333;
+  j["selftest"]["enable_coin_test"] = 0;
+  j["aws"]["enable"] = 1;
+  j["aws"]["endpoint"] = "http://example";
+  j["security"]["enable_ro_root"] = 1;
+  j["identity"]["use_tpm"] = 1;
+  j["safety"]["estop_pin"] = 5;
+  j["service"]["enable"] = 0;
+  j["pos"]["enable_http"] = 0;
+  j["ota"]["enable"] = 1;
+  j["manufacturing"]["enable_first_boot_eol"] = 0;
+  j["eol"]["weigh_tolerance_g"] = 0.5;
+  j["burnin"]["cycles"] = 1000;
+  j["quant"]["enable"] = 1;
+  std::ofstream(path) << j.dump();
   setenv("REGISTER_MVP_CONFIG", path.c_str(), 1);
-  auto c = cfg::load();
+  auto lr = cfg::load();
+  ASSERT_TRUE(lr.errors.empty());
+  const auto& c = lr.config;
   EXPECT_EQ(c.pins.step, 1);
   EXPECT_EQ(c.mech.steps_per_mm, 200);
   EXPECT_EQ(c.hopper.pulses_per_coin, 2);
@@ -95,49 +99,30 @@ TEST(Config, OverridesAllSections) {
 }
 
 TEST(Config, InvalidValuesAllSections) {
-  std::string path = "test_invalid_all.ini";
-  {
-    std::ofstream f(path);
-    f << "[io.pins]\nstep=abc\n";
-    f << "[mechanics]\nsteps_per_mm=abc\n";
-    f << "[hopper]\npulses_per_coin=abc\n";
-    f << "[dispense]\njam_ms=abc\n";
-    f << "[audit]\ncoin_mass_g=abc\n";
-    f << "[presentation]\npresent_ms=abc\n";
-    f << "[selftest]\nenable_coin_test=abc\n";
-    f << "[aws]\nenable=abc\n";
-    f << "[security]\nenable_ro_root=abc\n";
-    f << "[identity]\nuse_tpm=abc\n";
-    f << "[safety]\nestop_pin=abc\n";
-    f << "[service]\nenable=abc\n";
-    f << "[pos]\nenable_http=abc\n";
-    f << "[ota]\nenable=abc\n";
-    f << "[manufacturing]\nenable_first_boot_eol=abc\n";
-    f << "[eol]\nweigh_tolerance_g=abc\n";
-    f << "[burnin]\ncycles=abc\n";
-    f << "[quant]\nenable=abc\n";
-  }
+  std::string path = "test_invalid_all.json";
+  nlohmann::json j;
+  j["io"]["pins"]["step"] = "abc";
+  j["mechanics"]["steps_per_mm"] = "abc";
+  j["hopper"]["pulses_per_coin"] = "abc";
+  j["dispense"]["jam_ms"] = "abc";
+  j["audit"]["coin_mass_g"] = "abc";
+  j["presentation"]["present_ms"] = "abc";
+  j["selftest"]["enable_coin_test"] = "abc";
+  j["aws"]["enable"] = "abc";
+  j["security"]["enable_ro_root"] = "abc";
+  j["identity"]["use_tpm"] = "abc";
+  j["safety"]["estop_pin"] = "abc";
+  j["service"]["enable"] = "abc";
+  j["pos"]["enable_http"] = "abc";
+  j["ota"]["enable"] = "abc";
+  j["manufacturing"]["enable_first_boot_eol"] = "abc";
+  j["eol"]["weigh_tolerance_g"] = "abc";
+  j["burnin"]["cycles"] = "abc";
+  j["quant"]["enable"] = "abc";
+  std::ofstream(path) << j.dump();
   setenv("REGISTER_MVP_CONFIG", path.c_str(), 1);
-  auto c = cfg::load();
-  const auto& d = cfg::defaults();
-  EXPECT_EQ(c.pins.step, d.pins.step);
-  EXPECT_EQ(c.mech.steps_per_mm, d.mech.steps_per_mm);
-  EXPECT_EQ(c.hopper.pulses_per_coin, d.hopper.pulses_per_coin);
-  EXPECT_EQ(c.disp.jam_ms, d.disp.jam_ms);
-  EXPECT_DOUBLE_EQ(c.audit.coin_mass_g, d.audit.coin_mass_g);
-  EXPECT_EQ(c.pres.present_ms, d.pres.present_ms);
-  EXPECT_EQ(c.st.enable_coin_test, d.st.enable_coin_test);
-  EXPECT_EQ(c.aws.enable, d.aws.enable);
-  EXPECT_EQ(c.security.enable_ro_root, d.security.enable_ro_root);
-  EXPECT_EQ(c.identity.use_tpm, d.identity.use_tpm);
-  EXPECT_EQ(c.safety.estop_pin, d.safety.estop_pin);
-  EXPECT_EQ(c.service.enable, d.service.enable);
-  EXPECT_EQ(c.pos.enable_http, d.pos.enable_http);
-  EXPECT_EQ(c.ota.enable, d.ota.enable);
-  EXPECT_EQ(c.mfg.enable_first_boot_eol, d.mfg.enable_first_boot_eol);
-  EXPECT_DOUBLE_EQ(c.eol.weigh_tolerance_g, d.eol.weigh_tolerance_g);
-  EXPECT_EQ(c.burnin.cycles, d.burnin.cycles);
-  EXPECT_EQ(c.quant.enable, d.quant.enable);
+  auto lr = cfg::load();
+  EXPECT_FALSE(lr.errors.empty());
   std::vector<std::string> keys = {
     "io.pins.step","mechanics.steps_per_mm","hopper.pulses_per_coin","dispense.jam_ms",
     "audit.coin_mass_g","presentation.present_ms","selftest.enable_coin_test","aws.enable",
@@ -146,8 +131,8 @@ TEST(Config, InvalidValuesAllSections) {
     "burnin.cycles","quant.enable"};
   for (const auto& k : keys) {
     bool found = false;
-    for (const auto& w : c.warnings) {
-      if (w.find(k) != std::string::npos) { found = true; break; }
+    for (const auto& e : lr.errors) {
+      if (e.find(k) != std::string::npos) { found = true; break; }
     }
     EXPECT_TRUE(found) << k;
   }

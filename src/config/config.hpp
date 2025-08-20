@@ -144,11 +144,16 @@ struct Config {
   BurnInCfg burnin{};
   Quant quant{};
   std::string source_path; // loaded from
-  std::vector<std::string> warnings; // invalid keys/values
+  std::vector<std::string> warnings; // retained for backward compatibility
 };
 
-// Load with merge: missing fields take defaults; invalid values -> default + warning.
-Config load();
+struct LoadResult {
+  Config config;
+  std::vector<std::string> errors;
+};
+
+// Load config. Missing fields take defaults; invalid keys/values reported in errors.
+LoadResult load();
 // Expose sane built-in defaults
 const Config& defaults();
 

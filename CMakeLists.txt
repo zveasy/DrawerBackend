@@ -198,6 +198,7 @@ add_library(cfg
   src/config/config.cpp
 )
 target_include_directories(cfg PUBLIC . src)
+target_link_libraries(cfg PUBLIC nlohmann_json::nlohmann_json)
 
 # cloud
 add_library(cloud
@@ -249,7 +250,7 @@ include(GNUInstallDirs)
 install(TARGETS register_mvp RUNTIME DESTINATION /opt/register_mvp/bin)
 
 # Example config
-install(FILES config/config.example.ini DESTINATION /opt/register_mvp/share RENAME config.ini.example)
+install(FILES config/config.example.json DESTINATION /opt/register_mvp/share RENAME config.json.example)
 
 # Systemd + logrotate
 install(FILES packaging/systemd/register-mvp.service DESTINATION /lib/systemd/system)
