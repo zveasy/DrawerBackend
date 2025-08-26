@@ -288,6 +288,8 @@ set(CPACK_PACKAGE_CONTACT "ops@yourcompany.com")
 set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "Register MVP with POS connector and local API")
 set(CPACK_DEBIAN_PACKAGE_MAINTAINER "YourCompany")
 set(CPACK_PACKAGE_VERSION "1.0.0")
+set(CPACK_PACKAGE_LICENSE "MIT")
+set(CPACK_RESOURCE_FILE_LICENSE "${CMAKE_SOURCE_DIR}/LICENSE")
 
 # Dev convenience targets to manage local services
 add_custom_target(dev-up
