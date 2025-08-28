@@ -11,7 +11,8 @@ TEST(AuditSkip, NullScale) {
 }
 
 TEST(AuditSkip, CliSkips) {
-  FILE* fp = popen("../register_mvp --json dispense 3", "r");
+  // Use the flag form "--dispense 3" so CliOptions parses it regardless of argument order.
+  FILE* fp = popen("../register_mvp --json --dispense 3", "r");
   ASSERT_NE(fp, nullptr);
   char buf[256];
   std::string out;
