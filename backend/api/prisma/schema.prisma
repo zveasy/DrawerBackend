@@ -1,0 +1,95 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum LedgerType {
+  SWEEP
+  PAYOUT
+  ADJUSTMENT
+  INVESTMENT
+}
+
+enum RuleType {
+  PERCENT
+  FLAT
+}
+
+model Merchant {
+  id                String   @id @default(cuid())
+  squareMerchantId  String   @unique
+  displayName       String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  drawers           Drawer[]
+  transactions      Transaction[]
+  oauthTokens       OAuthToken[]
+}
+
+model OAuthToken {
+  id          String   @id @default(cuid())
+  merchant    Merchant @relation(fields: [merchantId], references: [id])
+  merchantId  String
+  accessToken String
+  refreshToken String?
+  scope       String?
+  expiresAt   DateTime?
+  createdAt   DateTime @default(now())
+}
+
+model Drawer {
+  id         String      @id @default(cuid())
+  merchant   Merchant    @relation(fields: [merchantId], references: [id])
+  merchantId String
+  currency   String      @default("USD")
+  balanceCents Int       @default(0)
+  createdAt  DateTime    @default(now())
+  updatedAt  DateTime    @updatedAt
+  rules      SweepRule[]
+  entries    LedgerEntry[]
+
+  @@unique([merchantId])
+}
+
+model SweepRule {
+  id        String   @id @default(cuid())
+  drawer    Drawer   @relation(fields: [drawerId], references: [id])
+  drawerId  String
+  type      RuleType
+  value     Int      // percent basis points (e.g., 100 = 1%) or flat cents
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([drawerId])
+}
+
+model Transaction {
+  id              String   @id @default(cuid())
+  merchant        Merchant @relation(fields: [merchantId], references: [id])
+  merchantId      String
+  squarePaymentId String   @unique
+  amountCents     Int
+  currency        String
+  createdAt       DateTime @default(now())
+}
+
+model LedgerEntry {
+  id         String     @id @default(cuid())
+  drawer     Drawer     @relation(fields: [drawerId], references: [id])
+  drawerId   String
+  type       LedgerType
+  amountCents Int
+  refId      String?
+  createdAt  DateTime   @default(now())
+}
+
+model WebhookEvent {
+  id        String   @id
+  type      String
+  createdAt DateTime @default(now())
+}
