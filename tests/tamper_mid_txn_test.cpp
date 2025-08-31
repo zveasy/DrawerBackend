@@ -7,6 +7,7 @@
 #include "../src/app/txn_engine.hpp"
 #include "../src/safety/faults.hpp"
 #include "../src/util/event_log.hpp"
+#include "test_fs.hpp"
 
 struct FakeShutter : IShutter {
   int open_calls{0};
@@ -23,6 +24,7 @@ struct FakeDispenser : IDispenser {
 };
 
 TEST(Tamper, MidTxn) {
+  TestCwd cwd;
   std::filesystem::remove_all("data");
   eventlog::Logger elog("data/service.log");
   cfg::Safety scfg; scfg.lid_tamper_pin = 20; scfg.debounce_ms=1; scfg.active_high=true;

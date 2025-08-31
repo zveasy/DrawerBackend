@@ -1,6 +1,7 @@
 #include <gtest/gtest.h>
 #include <filesystem>
 #include "../src/app/txn_engine.hpp"
+#include "test_fs.hpp"
 
 struct FakeShutter : IShutter {
   int open_calls{0}, close_calls{0};
@@ -20,6 +21,7 @@ struct FakeDispenser : IDispenser {
 };
 
 TEST(TxnRecovery, Resume) {
+  TestCwd cwd;
   std::filesystem::remove_all("data");
   journal::Txn t; t.id="txn-test"; t.quarters=10; t.dispensed=6; t.phase="DISPENSING"; journal::append(t);
   FakeShutter sh; FakeDispenser disp; TxnConfig cfg; TxnEngine eng(sh, disp, cfg);

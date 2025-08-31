@@ -23,6 +23,10 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Check test isolation
+        run: |
+          bash scripts/ci/check_test_isolation.sh
+
       - name: Apply hardening
         run: scripts/hardening/apply_hardening.sh
 
@@ -36,6 +40,9 @@ jobs:
       fail-fast: false
       matrix:
         compiler: [gcc, clang]
+        sanitizer: [none, asan-ubsan]
+        shard_index: [1, 2, 3, 4]
+        shard_total: [4]
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -44,14 +51,19 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
-            build-essential cmake pkg-config libgpiod-dev libssl-dev ca-certificates ccache
+            build-essential cmake pkg-config libgpiod-dev libssl-dev ca-certificates ccache ninja-build
+
+      - name: Configure ccache
+        run: |
+          ccache --zero-stats || true
+          ccache --max-size=500M || true
 
       - name: Cache ccache
         uses: actions/cache@v4
         with:
           path: |
             ~/.ccache
-          key: ccache-${{ runner.os }}-${{ matrix.compiler }}-${{ hashFiles('**/CMakeLists.txt', '**/*.cmake') }}
+          key: ccache-${{ runner.os }}-${{ matrix.compiler }}-${{ matrix.sanitizer }}-${{ hashFiles('**/CMakeLists.txt', '**/*.cmake') }}
           restore-keys: |
             ccache-${{ runner.os }}-${{ matrix.compiler }}-
 
@@ -60,17 +72,119 @@ jobs:
           CC: ${{ matrix.compiler == 'clang' && 'clang' || 'gcc' }}
           CXX: ${{ matrix.compiler == 'clang' && 'clang++' || 'g++' }}
         run: |
-          cmake -S . -B build -DBUILD_TESTING=ON -DUSE_MOCK_GPIO=ON \
+          if [ "${{ matrix.sanitizer }}" = "asan-ubsan" ]; then
+            SAN_FLAGS="-fsanitize=address,undefined -fno-omit-frame-pointer -O1"
+          else
+            SAN_FLAGS=""
+          fi
+          cmake -S . -B build -G Ninja -DBUILD_TESTING=ON -DUSE_MOCK_GPIO=ON -DCMAKE_BUILD_TYPE=RelWithDebInfo \
             -DCMAKE_C_COMPILER_LAUNCHER=ccache \
-            -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
+            -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
+            -DCMAKE_C_FLAGS="$SAN_FLAGS" -DCMAKE_CXX_FLAGS="$SAN_FLAGS" -DCMAKE_EXE_LINKER_FLAGS="$SAN_FLAGS"
 
       - name: Build
         run: |
           cmake --build build -j
 
       - name: Run unit tests
+        env:
+          ASAN_OPTIONS: strict_string_checks=1:detect_leaks=1:check_initialization_order=1:detect_stack_use_after_return=1
+          UBSAN_OPTIONS: print_stacktrace=1
         run: |
-          ctest --test-dir build --output-on-failure
+          if [ -n "${TEST_LABEL}" ]; then
+            echo "Running tests with label '${TEST_LABEL}'"
+            ctest --test-dir build -j $(nproc) -L "${TEST_LABEL}" \
+              --output-on-failure --output-junit junit-results-labeled.xml
+          else
+            ctest --test-dir build -j $(nproc) -I ${{ matrix.shard_index }},999999,${{ matrix.shard_total }} \
+              --output-on-failure --output-junit junit-results-${{ matrix.shard_index }}.xml
+          fi
+      - name: Upload JUnit results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: junit-${{ matrix.compiler }}-${{ matrix.sanitizer }}-${{ matrix.shard_index }}of${{ matrix.shard_total }}
+          path: |
+            build/junit-results-${{ matrix.shard_index }}.xml
+            build/junit-results-labeled.xml
+          retention-days: 7
+      - name: Publish Test Report
+        if: always()
+        uses: EnricoMi/publish-unit-test-result-action@v2
+        with:
+          files: build/junit-results-*.xml
+      - name: Show ccache stats
+        if: always()
+        run: |
+          ccache --show-stats || true
+
+  unit-tests-tsan:
+    if: github.event_name == 'schedule'
+    timeout-minutes: 30
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install build deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential cmake pkg-config libgpiod-dev libssl-dev ca-certificates ccache ninja-build
+
+      - name: Configure ccache
+        run: |
+          ccache --zero-stats || true
+          ccache --max-size=500M || true
+
+      - name: Cache ccache
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.ccache
+          key: ccache-${{ runner.os }}-clang-tsan-${{ hashFiles('**/CMakeLists.txt', '**/*.cmake') }}
+          restore-keys: |
+            ccache-${{ runner.os }}-clang-
+
+      - name: Configure (TSAN)
+        env:
+          CC: clang
+          CXX: clang++
+        run: |
+          SAN_FLAGS="-fsanitize=thread -fno-omit-frame-pointer -O1"
+          cmake -S . -B build -G Ninja -DBUILD_TESTING=ON -DUSE_MOCK_GPIO=ON -DCMAKE_BUILD_TYPE=RelWithDebInfo \
+            -DCMAKE_C_COMPILER_LAUNCHER=ccache \
+            -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
+            -DCMAKE_C_FLAGS="$SAN_FLAGS" -DCMAKE_CXX_FLAGS="$SAN_FLAGS" -DCMAKE_EXE_LINKER_FLAGS="$SAN_FLAGS"
+
+      - name: Build
+        run: |
+          cmake --build build -j
+
+      - name: Run unit tests (TSAN)
+        env:
+          TSAN_OPTIONS: halt_on_error=1:report_atomic_races=0
+        run: |
+          ctest --test-dir build -j $(nproc) --output-on-failure --output-junit junit-results.xml
+
+      - name: Upload JUnit results (TSAN)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: junit-clang-tsan
+          path: build/junit-results.xml
+          retention-days: 7
+
+      - name: Publish Test Report (TSAN)
+        if: always()
+        uses: EnricoMi/publish-unit-test-result-action@v2
+        with:
+          files: build/junit-results.xml
+
+      - name: Show ccache stats (TSAN)
+        if: always()
+        run: |
+          ccache --show-stats || true
   build-and-healthcheck:
     timeout-minutes: 20
     runs-on: ubuntu-latest
@@ -187,6 +301,7 @@ jobs:
             sbom-api.spdx.json
             sbom-pos.spdx.json
             sbom-api_tui.spdx.json
+          retention-days: 7
 
       - name: Push images to GHCR (main branch)
         if: github.ref == 'refs/heads/main'
@@ -280,11 +395,65 @@ jobs:
         with:
           name: compose-logs-build-health
           path: compose-logs.txt
+          retention-days: 7
 
       - name: Tear down
         if: always()
         run: |
           docker compose down -v
+
+  unit-tests-timing:
+    if: github.event_name == 'schedule'
+    timeout-minutes: 25
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install build deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential cmake pkg-config libgpiod-dev libssl-dev ca-certificates ccache ninja-build
+
+      - name: Configure ccache
+        run: |
+          ccache --zero-stats || true
+          ccache --max-size=500M || true
+
+      - name: Cache ccache
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.ccache
+          key: ccache-${{ runner.os }}-timing-${{ hashFiles('**/CMakeLists.txt', '**/*.cmake') }}
+          restore-keys: |
+            ccache-${{ runner.os }}-
+
+      - name: Configure (timing)
+        env:
+          CC: clang
+          CXX: clang++
+        run: |
+          cmake -S . -B build -G Ninja -DBUILD_TESTING=ON -DUSE_MOCK_GPIO=ON -DCMAKE_BUILD_TYPE=RelWithDebInfo \
+            -DCMAKE_C_COMPILER_LAUNCHER=ccache \
+            -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
+
+      - name: Build
+        run: |
+          cmake --build build -j
+
+      - name: Run tests to collect timing (CTest Dashboard)
+        run: |
+          ctest --test-dir build -T Test -j $(nproc) --output-on-failure || true
+
+      - name: Upload CTest timing data
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ctest-testing-timings
+          path: build/Testing
+          retention-days: 7
 
   docs-prod-check:
     timeout-minutes: 15
@@ -315,6 +484,7 @@ jobs:
         with:
           name: docs_site
           path: docs_site.tgz
+          retention-days: 7
 
       - name: Serve built docs and verify
         env:

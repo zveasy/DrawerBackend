@@ -4,6 +4,7 @@
 #include <httplib.h>
 #include "ssl_helpers.hpp"
 #include <cstdlib>
+#include "test_fs.hpp"
 
 struct FakeShutter : IShutter {
   bool home(int, std::string*) override { return true; }
@@ -23,6 +24,7 @@ class HttpHandlers : public ::testing::TestWithParam<bool> {};
 
 TEST_P(HttpHandlers, BasicFlow) {
   bool tls = GetParam();
+  TestCwd cwd;
   std::filesystem::remove_all("data");
   FakeShutter sh;
   FakeDispenser disp;
@@ -72,6 +74,7 @@ TEST_P(HttpHandlers, BasicFlow) {
 
 TEST_P(HttpHandlers, RateLimit) {
   bool tls = GetParam();
+  TestCwd cwd;
   std::filesystem::remove_all("data");
   FakeShutter sh;
   FakeDispenser disp;
@@ -114,6 +117,7 @@ TEST_P(HttpHandlers, RateLimit) {
 
 TEST_P(HttpHandlers, MalformedJson) {
   bool tls = GetParam();
+  TestCwd cwd;
   std::filesystem::remove_all("data");
   FakeShutter sh;
   FakeDispenser disp;
@@ -183,6 +187,7 @@ TEST_P(HttpHandlers, MalformedJson) {
 
 TEST_P(HttpHandlers, MetricsRequireAuth) {
   bool tls = GetParam();
+  TestCwd cwd;
   std::filesystem::remove_all("data");
   FakeShutter sh;
   FakeDispenser disp;

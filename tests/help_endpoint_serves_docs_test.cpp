@@ -4,6 +4,7 @@
 #include "../src/server/http_server.hpp"
 #include <httplib.h>
 #include "ssl_helpers.hpp"
+#include "test_fs.hpp"
 
 struct DummyShutter : IShutter {
   bool home(int, std::string*) override { return true; }
@@ -22,6 +23,7 @@ class HelpEndpoint : public ::testing::TestWithParam<bool> {};
 TEST_P(HelpEndpoint, ServesDocs) {
   bool tls = GetParam();
   namespace fs = std::filesystem;
+  TestCwd cwd;
   fs::path root = fs::temp_directory_path()/"reg_docs";
   fs::create_directories(root/"operator");
   std::ofstream(root/"operator/QuickStart.md") << "Quick start content";

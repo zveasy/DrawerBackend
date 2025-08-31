@@ -4,6 +4,7 @@
 #include "../src/pos/idempotency_store.hpp"
 #include "../src/app/txn_engine.hpp"
 #include "../src/quant/publisher.hpp"
+#include "test_fs.hpp"
 
 struct NoopShutter : IShutter { bool home(int, std::string*) override { return true; } bool open_mm(int, std::string*) override { return true; } bool close_mm(int, std::string*) override { return true; } };
 struct InstantDisp : IDispenser { DispenseStats dispenseCoins(int c) override { return DispenseStats{true, c, c, 0, 0, "", 0}; } };
@@ -27,6 +28,7 @@ public:
 };
 
 TEST(QuantPublishHook, PublishesOnSuccess) {
+  TestCwd cwd;
   std::filesystem::remove_all("idemdata");
   NoopShutter sh; InstantDisp disp; TxnConfig cfg; TxnEngine eng(sh, disp, cfg);
   pos::IdempotencyStore store("idemdata"); ASSERT_TRUE(store.open());

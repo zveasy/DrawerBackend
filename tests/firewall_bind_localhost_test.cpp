@@ -3,6 +3,7 @@
 #include <httplib.h>
 #include <filesystem>
 #include "ssl_helpers.hpp"
+#include "test_fs.hpp"
 
 struct FakeShutter : IShutter {
   bool home(int, std::string*) override { return true; }
@@ -21,6 +22,7 @@ class Firewall : public ::testing::TestWithParam<bool> {};
 
 TEST_P(Firewall, BindLocalhostOnly) {
   bool tls = GetParam();
+  TestCwd cwd;
   std::filesystem::remove_all("data");
   FakeShutter sh; FakeDispenser disp; TxnConfig cfg; TxnEngine eng(sh, disp, cfg);
   std::string cert,key; if (tls) write_test_cert(std::filesystem::temp_directory_path()/"httptest5", cert, key);
