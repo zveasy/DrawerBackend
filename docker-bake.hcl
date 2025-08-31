@@ -45,3 +45,12 @@ target "api_tui" {
     USE_MOCK_GPIO = "ON"
   }
 }
+
+target "square_webhooks" {
+  context    = "integrations/pos/square/webhook_service"
+  dockerfile = "Dockerfile"
+  platforms  = ["linux/amd64", "linux/arm64"]
+  tags       = [
+    "drawerbackend-square_webhooks:${TAG}",
+  ]
+}

@@ -15,3 +15,32 @@ build*/
 
 # Local logs mounted by docker-compose
 logs/
+
+# Python caches
+**/__pycache__/
+**/*.pyc
+**/.pytest_cache/
+**/.mypy_cache/
+
+# Virtual environments
+.venv/
+venv/
+**/.venv/
+**/venv/
+integrations/pos/square/webhook_service/.venv/
+
+# Coverage reports
+.coverage
+coverage.xml
+htmlcov/
+
+# Build artifacts
+dist/
+
+# IDE/editor
+.vscode/
+.idea/
+
+# Local env overrides (keep .env if you want it tracked)
+.env.local
+.env.*.local

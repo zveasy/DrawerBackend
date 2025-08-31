@@ -47,6 +47,45 @@ Example payload:
 - `amount.change_cents`: Change dispensed (can be `0`).
 - `sig`: Optional HMAC-SHA256 hex over the JSON string without `sig`.
 
+## Event: drawer_balance
+
+Emitted when the drawer/account balance changes (e.g., after a sweep) or on periodic heartbeat.
+
+Example payload:
+```json
+{
+  "type": "drawer_balance",
+  "version": 1,
+  "client_id": "REG-CLIENT",
+  "account_id": "<merchant-or-account-id>",
+  "ts_ms": 1712712345678,
+  "currency": "USD",
+  "balance_cents": 345678,
+  "delta_cents": 2500,
+  "idem_key": "<drawer-event-idem>",
+  "amounts": {
+    "pending_change_cents": 0,
+    "reserve_floor_cents": 2000
+  },
+  "sig": "<optional-hex-hmac>"
+}
+```
+
+### Field definitions
+
+- `type`: Always `drawer_balance` for balance/ledger updates.
+- `version`: Schema version. Currently `1`.
+- `client_id`: From config `cfg.quant.client_id`.
+- `account_id`: Merchant/account identifier (caller-supplied; may reuse device or tenant id).
+- `ts_ms`: Unix epoch timestamp in milliseconds at publish time.
+- `currency`: ISO currency code for `*_cents` values.
+- `balance_cents`: Current drawer/account balance after applying `delta_cents`.
+- `delta_cents`: Most recent applied change to the balance (can be `0`).
+- `idem_key`: Idempotency key for de-duplication of balance events.
+- `amounts.pending_change_cents`: Change reserved but not yet reconciled.
+- `amounts.reserve_floor_cents`: Reserve floor to keep in drawer.
+- `sig`: Optional HMAC-SHA256 hex over the JSON string without `sig`.
+
 ## Configuration
 
 From `config/config.example.ini` `[quant]` section:

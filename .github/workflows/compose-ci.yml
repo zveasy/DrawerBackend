@@ -185,6 +185,26 @@ jobs:
         if: always()
         run: |
           ccache --show-stats || true
+
+  square-webhooks-tests:
+    timeout-minutes: 10
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install deps
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r integrations/pos/square/webhook_service/requirements-test.txt
+      - name: Run pytest
+        env:
+          PYTHONPATH: .
+        run: |
+          pytest -q integrations/pos/square/webhook_service/tests
   build-and-healthcheck:
     timeout-minutes: 20
     runs-on: ubuntu-latest
@@ -229,6 +249,7 @@ jobs:
             api
             pos
             api_tui
+            square_webhooks
 
       - name: Vulnerability scan (api)
         uses: anchore/scan-action@v4
@@ -267,10 +288,24 @@ jobs:
           fail-build: false
           severity-cutoff: high
 
+      - name: Vulnerability scan (square_webhooks)
+        uses: anchore/scan-action@v4
+        with:
+          image: drawerbackend-square_webhooks:local
+          output-format: sarif
+          output-file: anchore-square_webhooks.sarif
+          fail-build: false
+          severity-cutoff: high
+
       - name: Upload SARIF (api_tui)
         uses: github/codeql-action/upload-sarif@v3
         with:
           sarif_file: anchore-api_tui.sarif
+
+      - name: Upload SARIF (square_webhooks)
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: anchore-square_webhooks.sarif
 
       - name: Generate SBOM (api)
         uses: anchore/sbom-action@v0
@@ -293,6 +328,13 @@ jobs:
           format: spdx-json
           output-file: sbom-api_tui.spdx.json
 
+      - name: Generate SBOM (square_webhooks)
+        uses: anchore/sbom-action@v0
+        with:
+          image: drawerbackend-square_webhooks:local
+          format: spdx-json
+          output-file: sbom-square_webhooks.spdx.json
+
       - name: Upload SBOM artifacts
         uses: actions/upload-artifact@v4
         with:
@@ -301,6 +343,7 @@ jobs:
             sbom-api.spdx.json
             sbom-pos.spdx.json
             sbom-api_tui.spdx.json
+            sbom-square_webhooks.spdx.json
           retention-days: 7
 
       - name: Push images to GHCR (main branch)
@@ -319,10 +362,13 @@ jobs:
             pos.push=true
             api_tui.tags=ghcr.io/${{ github.repository }}-api_tui:${{ github.sha }}
             api_tui.push=true
+            square_webhooks.tags=ghcr.io/${{ github.repository }}-square_webhooks:${{ github.sha }}
+            square_webhooks.push=true
           targets: |
             api
             pos
             api_tui
+            square_webhooks
 
       - name: Push latest tags to GHCR (main branch and schedule)
         if: github.ref == 'refs/heads/main'
@@ -340,10 +386,13 @@ jobs:
             pos.push=true
             api_tui.tags=ghcr.io/${{ github.repository }}-api_tui:latest
             api_tui.push=true
+            square_webhooks.tags=ghcr.io/${{ github.repository }}-square_webhooks:latest
+            square_webhooks.push=true
           targets: |
             api
             pos
             api_tui
+            square_webhooks
 
       - name: Start services (no rebuild)
         env:
@@ -353,13 +402,19 @@ jobs:
           POS_PORT: "9090"
           DOCS_PORT: "8082"
           API_TUI_PORT: "8081"
+          SQUARE_WEBHOOKS_PORT: "8085"
+          ZMQ_ENDPOINT: "tcp://localhost:5555"
+          ZMQ_TOPIC: "register/stream"
+          CLIENT_ID: "REG-CLIENT"
+          HMAC_KEY_HEX: ""
+          DEFAULT_RESERVE_FLOOR_CENTS: "2000"
         run: |
-          docker compose up -d --no-build api pos docs api_tui
+          docker compose up -d --no-build api pos docs api_tui square_webhooks
 
       - name: Wait for health
         run: |
           set -e
-          services=(api pos docs api_tui)
+          services=(api pos docs api_tui square_webhooks)
           for s in "${services[@]}"; do
             echo "Waiting for $s to be healthy..."
             for i in {1..60}; do
@@ -382,6 +437,7 @@ jobs:
           curl -fsS http://localhost:9090/ping | head -c 200 >/dev/null
           curl -fsS http://localhost:8082/ | head -c 200 >/dev/null
           curl -fsS http://localhost:8081/status | head -c 200 >/dev/null
+          curl -fsS http://localhost:8085/health | head -c 200 >/dev/null
 
       - name: Compose logs on failure
         if: failure()
