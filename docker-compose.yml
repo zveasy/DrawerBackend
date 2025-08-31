@@ -22,6 +22,56 @@ services:
       options:
         max-size: "10m"
         max-file: "3"
+
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--appendonly", "yes"]
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli ping | grep PONG"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 5s
+    restart: unless-stopped
+
+  square_webhooks:
+    build:
+      context: ./integrations/pos/square/webhook_service
+      dockerfile: Dockerfile
+    environment:
+      - SQUARE_ENV=${SQUARE_ENV}
+      - SQUARE_WEBHOOK_SIGNATURE_KEY=${SQUARE_WEBHOOK_SIGNATURE_KEY}
+      - SKIP_SIGNATURE_VERIFY=${SKIP_SIGNATURE_VERIFY}
+      - ALLOW_SIGNATURE_FALLBACKS=${ALLOW_SIGNATURE_FALLBACKS}
+      - ZMQ_ENDPOINT=${ZMQ_ENDPOINT}
+      - ZMQ_TOPIC=${ZMQ_TOPIC}
+      - CLIENT_ID=${CLIENT_ID}
+      - HMAC_KEY_HEX=${HMAC_KEY_HEX}
+      - DEFAULT_RESERVE_FLOOR_CENTS=${DEFAULT_RESERVE_FLOOR_CENTS}
+      - LOG_LEVEL=${LOG_LEVEL}
+      - REDIS_URL=${REDIS_URL}
+      - SWEEP_PERCENT=${SWEEP_PERCENT}
+      - PORT=${SQUARE_WEBHOOKS_PORT}
+    command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "${SQUARE_WEBHOOKS_PORT}"]
+    ports:
+      - "${SQUARE_WEBHOOKS_PORT}:${SQUARE_WEBHOOKS_PORT}"
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "-", "http://127.0.0.1:${SQUARE_WEBHOOKS_PORT}/health"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
+    restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    depends_on:
+      redis:
+        condition: service_healthy
   docs:
     profiles: ["dev"]
     image: squidfunk/mkdocs-material:latest
