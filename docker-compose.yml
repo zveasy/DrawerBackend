@@ -80,6 +80,7 @@ services:
         max-file: "3"
 
   api:
+    image: register_mvp-api:local
     build:
       context: .
       dockerfile: Dockerfile
@@ -110,6 +111,7 @@ services:
         max-file: "3"
 
   pos:
+    image: register_mvp-pos:local
     build:
       context: .
       dockerfile: Dockerfile
@@ -141,6 +143,7 @@ services:
 
   api_tui:
     profiles: ["dev"]
+    image: register_mvp-api_tui:local
     build:
       context: .
       dockerfile: Dockerfile

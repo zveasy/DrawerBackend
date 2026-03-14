@@ -1,28 +1,29 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# verify systemd unit runs as registermvp user
-if ! systemctl show register-mvp.service -p User --value 2>/dev/null | grep -qx 'registermvp'; then
-  echo "register-mvp service is not configured to run as registermvp user" >&2
+fail() {
+  echo "$1" >&2
   exit 1
-fi
+}
 
-# verify SSH password logins are disabled
-if ! sshd -T 2>/dev/null | grep -iq '^passwordauthentication no'; then
-  echo "SSH password authentication is not disabled" >&2
-  exit 1
-fi
+unit_file="/lib/systemd/system/register-mvp.service"
+sshd_hardening="/etc/ssh/sshd_config.d/register-mvp.conf"
+nft_conf="/etc/nftables.conf"
+audit_rules="/etc/audit/rules.d/register-mvp.rules"
 
-# verify nftables default policy drop
-if ! nft list ruleset 2>/dev/null | grep -q 'policy drop'; then
-  echo "nftables default policy is not set to drop" >&2
-  exit 1
-fi
+# verify systemd unit is installed and pinned to the least-privileged user
+[[ -f "${unit_file}" ]] || fail "missing systemd unit file: ${unit_file}"
+grep -Eq '^User=registermvp$' "${unit_file}" || fail "register-mvp.service is not configured with User=registermvp"
+
+# verify SSH hardening drop-in is installed and disables password auth
+[[ -f "${sshd_hardening}" ]] || fail "missing ssh hardening file: ${sshd_hardening}"
+grep -Eiq '^PasswordAuthentication[[:space:]]+no$' "${sshd_hardening}" || fail "SSH password authentication is not disabled in ${sshd_hardening}"
+
+# verify nftables default-drop policy was installed
+[[ -f "${nft_conf}" ]] || fail "missing nftables config: ${nft_conf}"
+grep -Eq 'policy[[:space:]]+drop' "${nft_conf}" || fail "nftables default drop policy not found in ${nft_conf}"
 
 # verify auditd rule file present
-if [ ! -f /etc/audit/rules.d/register-mvp.rules ]; then
-  echo "auditd rule file /etc/audit/rules.d/register-mvp.rules is missing" >&2
-  exit 1
-fi
+[[ -f "${audit_rules}" ]] || fail "auditd rule file ${audit_rules} is missing"
 
-echo "Hardening verification passed." 
+echo "Hardening verification passed."
