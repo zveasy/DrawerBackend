@@ -181,6 +181,8 @@ add_test(NAME power_budget_script_test COMMAND bash ${CMAKE_CURRENT_SOURCE_DIR}/
 
 add_test(NAME smoke_store_demo_script_test COMMAND bash ${CMAKE_CURRENT_SOURCE_DIR}/smoke_store_demo_script_test.sh WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
 
+add_test(NAME checklist_evidence_script_test COMMAND bash ${CMAKE_CURRENT_SOURCE_DIR}/checklist_evidence_script_test.sh WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
+
 add_executable(http_concurrency_test http_concurrency_test.cpp)
 target_include_directories(http_concurrency_test PRIVATE .. ../src)
 target_compile_features(http_concurrency_test PRIVATE cxx_std_17)
