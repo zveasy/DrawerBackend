@@ -37,6 +37,7 @@ class FleetManager {
   std::vector<device_twin::DrawerTwin> list() const;
   std::optional<device_twin::DrawerTwin> get(const std::string& drawer_id) const;
   FleetMetrics metrics() const;
+  control_plane::SyncStatus sync_status() const;
   void record_history(const std::string& drawer_id, device_twin::HistoryEvent event);
 
  private:

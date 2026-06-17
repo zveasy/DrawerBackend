@@ -6,6 +6,8 @@
 #include <iomanip>
 #include <map>
 #include <openssl/sha.h>
+#include "obs/metrics.hpp"
+#include "ops/operational_status.hpp"
 #include "util/persist.hpp"
 
 namespace fs = std::filesystem;
@@ -93,24 +95,29 @@ int Agent::hash_device(const std::string& id) { return static_cast<int>(std::has
 bool Agent::allow(int h, int percent) { return h < percent; }
 
 OtaResult Agent::run_once() {
-  if (!cfg_.ota.enable) return {false, "disabled"};
+  auto reject = [](const std::string& reason) {
+    obs::M().counter("register_ota_rejects_total", "OTA rejects", {{"reason", reason}}).inc();
+    ops::update_ota(reason);
+    return OtaResult{false, reason};
+  };
+  if (!cfg_.ota.enable) return reject("disabled");
   State st; load_state(cfg_, st);
   std::string manifest;
   FileManifestFetcher default_fetcher;
   auto fres = (fetcher_ ? fetcher_ : &default_fetcher)->fetch(cfg_.ota.feed_url, manifest);
-  if (!fres.ok) return fres;
+  if (!fres.ok) return reject(fres.reason);
   std::string channel = extract_string(manifest, "channel");
-  if (!supported_channel(channel)) return {false, "channel"};
-  if (channel != cfg_.ota.channel) return {false,"channel"};
+  if (!supported_channel(channel)) return reject("channel");
+  if (channel != cfg_.ota.channel) return reject("channel");
   std::string version = extract_string(manifest, "version");
-  if (version <= st.current_version) return {false, "version"};
+  if (version <= st.current_version) return reject("version");
   std::string device_id = cfg_.aws.thing_name.empty() ? cfg_.aws.client_id : cfg_.aws.thing_name;
-  if (contains_token(manifest, "revoked_devices", device_id)) return {false, "revoked"};
+  if (contains_token(manifest, "revoked_devices", device_id)) return reject("revoked");
   int rollout = extract_stage(manifest, "rollout_percent");
-  if (!allow(hash_device(device_id), rollout)) return {false, "rollout"};
+  if (!allow(hash_device(device_id), rollout)) return reject("rollout");
   std::string artifact = extract_string(manifest, "artifact_url");
   std::string sha = extract_string(manifest, "sha256");
-  if (sha.empty()) return {false, "sha"};
+  if (sha.empty()) return reject("sha");
   std::string sig = extract_string(manifest, "sig_ed25519");
   std::string verify_payload = manifest;
   auto spos = verify_payload.find("\"sig_ed25519\"");
@@ -119,23 +126,24 @@ OtaResult Agent::run_once() {
     if (epos == std::string::npos) epos = verify_payload.rfind('}');
     verify_payload.erase(spos, epos - spos);
   }
-  if (cfg_.ota.require_signed && cfg_.ota.key_pub.empty()) return {false, "sig_key"};
+  if (cfg_.ota.require_signed && cfg_.ota.key_pub.empty()) return reject("sig_key");
   if (cfg_.ota.require_signed && cfg_.ota.key_pub.size()>0) {
     std::string pub = read_file(cfg_.ota.key_pub);
-    if (!ed25519::verify_pem(pub, verify_payload, sig)) return {false, "sig"};
+    if (!ed25519::verify_pem(pub, verify_payload, sig)) return reject("sig");
   }
   std::string art_path = artifact.substr(7);
   std::string data = read_file(art_path);
-  if (hex_sha256(data) != sha) return {false, "sha"};
+  if (hex_sha256(data) != sha) return reject("sha");
   fs::create_directories(cfg_.ota.state_dir + "/downloads");
   std::string dest = cfg_.ota.state_dir + "/downloads/artifact";
   std::ofstream out(dest, std::ios::binary); out<<data; out.close();
   auto res = backend_.install_bundle(dest);
-  if (!res.ok) return res;
+  if (!res.ok) return reject(res.reason);
   st.pending_version = version;
   st.boot_pending = true;
   save_state(cfg_, st);
   std::ofstream(cfg_.ota.state_dir + "/boot_pending").close();
+  ops::update_ota("installed");
   return {true, ""};
 }
 

@@ -11,6 +11,7 @@
 #include "server/version_endpoint.hpp"
 #include "server/docs_endpoint.hpp"
 #include "cloud/fleet_manager/fleet_routes.hpp"
+#include "ops/operational_status.hpp"
 #include "util/log.hpp"
 
 namespace {
@@ -268,11 +269,11 @@ void HttpServer::setup_routes() {
     auto snap = snapshot();
     bool has_last = !snap.last.id.empty();
     std::string last_json = has_last ? journal::to_json(snap.last) : std::string("{}");
-    std::ostringstream oss;
-    oss << "{\"in_progress\":" << (snap.in_progress ? "true" : "false")
-        << ",\"last\":" << (has_last ? last_json : "{}") << ",\"version\":\"" << snap.version
-        << "\"}";
-    res.set_content(oss.str(), "application/json");
+    nlohmann::json status = {{"in_progress", snap.in_progress},
+                             {"last", has_last ? nlohmann::json::parse(last_json) : nlohmann::json::object()},
+                             {"version", snap.version}};
+    status["operational"] = ops::current_status();
+    res.set_content(status.dump(), "application/json");
   });
 
   svr.Post("/command", [this](const httplib::Request& req, httplib::Response& res) {

@@ -10,6 +10,7 @@
 #include <sstream>
 
 #include "obs/metrics.hpp"
+#include "ops/operational_status.hpp"
 #include "util/log.hpp"
 
 namespace cloud::fleet_manager {
@@ -105,6 +106,10 @@ bool FleetManager::submit_update(device_twin::DrawerTwin twin) {
     twins_[enriched.drawer_id] = std::move(enriched);
     save_store_locked();
     publish_metrics_locked(metrics_locked());
+    auto st = control_plane_->status();
+    ops::update_cloud_sync("disabled", st.offline_queue_depth, st.last_successful_sync_at,
+                           st.last_failed_sync_at);
+    obs::M().counter("register_revoked_device_attempts_total", "Revoked device attempts").inc();
     return false;
   }
   auto enriched = enrich(std::move(twin));
@@ -117,22 +122,31 @@ bool FleetManager::submit_update(device_twin::DrawerTwin twin) {
       enriched.sync_status = "disabled";
       enriched.conflict = false;
       enriched.conflict_reason.clear();
+      obs::M().counter("register_revoked_device_attempts_total", "Revoked device attempts").inc();
     } else if (sync.conflict) {
       enriched.sync_status = "conflict";
       enriched.conflict = true;
       enriched.conflict_reason = sync.reason.empty() ? "remote_revision_conflict" : sync.reason;
       enriched.remote_revision = sync.twin.revision;
+      obs::M().counter("register_cloud_sync_conflicts_total", "Cloud sync conflicts").inc();
     } else if (sync.ok) {
       enriched.sync_status = "synced";
       enriched.last_synced_at = now_iso();
       enriched.conflict = false;
       enriched.conflict_reason.clear();
       enriched.remote_revision = sync.twin.revision;
+      obs::M().counter("register_cloud_sync_success_total", "Cloud sync successes").inc();
     } else {
       enriched.sync_status = "sync_failed";
       enriched.conflict = false;
       enriched.conflict_reason = sync.reason;
+      obs::M().counter("register_cloud_sync_failures_total", "Cloud sync failures",
+                       {{"reason", sync.reason.empty() ? "unknown" : sync.reason}})
+          .inc();
     }
+    auto st = control_plane_->status();
+    ops::update_cloud_sync(enriched.sync_status, st.offline_queue_depth, enriched.last_synced_at,
+                           st.last_failed_sync_at);
   }
   std::lock_guard<std::mutex> lk(mu_);
   twins_[enriched.drawer_id] = enriched;
@@ -156,7 +170,13 @@ control_plane::EnrollmentResult FleetManager::enroll(const control_plane::Enroll
   if (!control_plane_) return {false, false, "control_plane_unavailable", {}};
   auto result = control_plane_->enroll(request);
   if (result.ok) upsert(result.twin);
+  ops::update_enrollment(result.ok ? "enrolled" : result.reason);
   return result;
+}
+
+control_plane::SyncStatus FleetManager::sync_status() const {
+  if (!control_plane_) return {};
+  return control_plane_->status();
 }
 
 std::vector<device_twin::DrawerTwin> FleetManager::list() const {

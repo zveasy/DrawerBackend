@@ -5,22 +5,23 @@ commercial scale.
 
 ## Control Plane
 
-The device twin store is durable locally and has a cloud-control-plane
-interface, but the cloud service remains to be built. A production deployment
-needs a remote source of truth, conflict-resolution policy, tenant isolation,
-fleet RBAC, and cloud audit retention.
+The device twin store is durable locally and now has an authenticated HTTP
+control-plane contract with conflict detection and an offline queue. Production
+still needs a hosted remote source of truth, tenant isolation, fleet RBAC, cloud
+audit retention, and operator tooling for conflict resolution.
 
 ## Identity
 
-Enrollment and revocation scaffolding is present. Production still needs
-manufacturing-backed identity issuance, mTLS certificate lifecycle management,
-secure token delivery, and compromised-device recovery.
+Enrollment and revocation scaffolding is present, including one-time token
+validation and identity persistence. Production still needs manufacturing-backed
+identity issuance, secure token delivery, and compromised-device recovery.
 
 ## OTA
 
-The OTA agent fails closed for signed mode and rejects unsafe manifests. It
-still needs a production update backend, signed release pipeline, staged rollout
-orchestration, rollback reporting, and regional release approvals.
+The OTA agent fails closed for signed mode and rejects unsafe manifests. The OTA
+release service now models promotion, staged rollout, rollback protection, and
+eligibility audit decisions. Production still needs artifact hosting, signed
+release pipeline automation, rollback reporting, and regional release approvals.
 
 ## International Operations
 

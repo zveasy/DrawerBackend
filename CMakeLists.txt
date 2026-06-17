@@ -81,6 +81,12 @@ add_library(obs
 target_include_directories(obs PUBLIC . src)
 target_link_libraries(obs PUBLIC httplib::httplib Threads::Threads)
 
+add_library(ops
+  src/ops/operational_status.cpp
+)
+target_include_directories(ops PUBLIC . src)
+target_link_libraries(ops PUBLIC nlohmann_json::nlohmann_json)
+
 # hal
 add_library(hal
   hal/gpio.hpp
@@ -173,9 +179,10 @@ add_library(ota
   src/ota/backend_rauc.cpp
   src/ota/agent.cpp
   src/ota/healthd.cpp
+  src/ota/release_service.cpp
 )
 target_include_directories(ota PUBLIC . src)
-target_link_libraries(ota PUBLIC util cfg httplib::httplib OpenSSL::SSL OpenSSL::Crypto)
+target_link_libraries(ota PUBLIC util cfg httplib::httplib OpenSSL::SSL OpenSSL::Crypto obs ops nlohmann_json::nlohmann_json)
 target_compile_definitions(ota PUBLIC CPPHTTPLIB_OPENSSL_SUPPORT)
 target_compile_options(ota PRIVATE -UCPPHTTPLIB_USE_CERTS_FROM_MACOSX_KEYCHAIN)
 
@@ -208,7 +215,11 @@ add_library(cloud
   src/cloud/shadow.cpp
   src/cloud/tls_identity.cpp
   src/cloud/identity.cpp
+  src/cloud/identity/cert_identity.cpp
   src/cloud/device_twin/models.cpp
+  src/cloud/control_plane/http_device_twin_client.cpp
+  src/cloud/control_plane/enrollment_service.cpp
+  src/cloud/control_plane/twin_contract_server.cpp
   src/cloud/analytics/health_scoring.cpp
   src/cloud/analytics/predictive_maintenance.cpp
   src/cloud/analytics/inventory_forecast.cpp
@@ -217,7 +228,7 @@ add_library(cloud
   src/cloud/fleet_manager/fleet_routes.cpp
 )
 target_include_directories(cloud PUBLIC . src)
-target_link_libraries(cloud PUBLIC util obs)
+target_link_libraries(cloud PUBLIC util obs ops httplib::httplib Threads::Threads)
 if(USE_NLOHMANN_JSON)
   target_link_libraries(cloud PUBLIC nlohmann_json::nlohmann_json)
   target_compile_definitions(cloud PUBLIC USE_NLOHMANN_JSON=1)

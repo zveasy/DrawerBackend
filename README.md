@@ -61,10 +61,20 @@ and international inventory metadata. Disabled or revoked devices are prevented
 from submitting fleet updates, receiving local commands, or applying OTA
 updates.
 
+The production-integration layer adds an authenticated HTTP cloud contract for
+twin push/pull, one-time enrollment token validation, certificate identity
+lifecycle tracking, and OTA release eligibility APIs. The local JSON twin store
+remains the offline cache and an offline sync queue preserves device updates
+while the cloud endpoint is unavailable.
+
 See [docs/device_enrollment.md](docs/device_enrollment.md),
 [docs/international_deployment.md](docs/international_deployment.md),
 [docs/ota_safety_model.md](docs/ota_safety_model.md), and
-[docs/production_gaps.md](docs/production_gaps.md).
+[docs/production_gaps.md](docs/production_gaps.md). Production integration
+contracts are documented in [docs/cloud_sync_contract.md](docs/cloud_sync_contract.md),
+[docs/production_enrollment_flow.md](docs/production_enrollment_flow.md),
+[docs/ota_release_lifecycle.md](docs/ota_release_lifecycle.md), and
+[docs/mtls_lifecycle.md](docs/mtls_lifecycle.md).
 
 ## Fleet API
 
