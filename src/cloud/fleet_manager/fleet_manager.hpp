@@ -2,6 +2,7 @@
 
 #include <mutex>
 #include <optional>
+#include <memory>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -10,6 +11,7 @@
 #include "cloud/analytics/health_scoring.hpp"
 #include "cloud/analytics/inventory_forecast.hpp"
 #include "cloud/analytics/predictive_maintenance.hpp"
+#include "cloud/control_plane/device_twin_control_plane.hpp"
 #include "cloud/device_twin/models.hpp"
 
 namespace cloud::fleet_manager {
@@ -27,8 +29,11 @@ void to_json(nlohmann::json& j, const FleetMetrics& v);
 
 class FleetManager {
  public:
-  explicit FleetManager(std::string store_path = "");
+  explicit FleetManager(std::string store_path = "",
+                        std::shared_ptr<control_plane::DeviceTwinControlPlane> control_plane = {});
+  bool submit_update(device_twin::DrawerTwin twin);
   void upsert(device_twin::DrawerTwin twin);
+  control_plane::EnrollmentResult enroll(const control_plane::EnrollmentRequest& request);
   std::vector<device_twin::DrawerTwin> list() const;
   std::optional<device_twin::DrawerTwin> get(const std::string& drawer_id) const;
   FleetMetrics metrics() const;
@@ -44,6 +49,7 @@ class FleetManager {
   mutable std::mutex mu_;
   std::unordered_map<std::string, device_twin::DrawerTwin> twins_;
   std::string store_path_;
+  std::shared_ptr<control_plane::DeviceTwinControlPlane> control_plane_;
   analytics::HealthScoringEngine health_;
   analytics::PredictiveMaintenanceEngine maintenance_;
   analytics::InventoryForecastEngine inventory_;

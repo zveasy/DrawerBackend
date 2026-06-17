@@ -2,6 +2,14 @@
 
 namespace cloud::device_twin {
 
+bool valid_currency_code(const std::string& code) {
+  if (code.size() != 3) return false;
+  for (char c : code) {
+    if (c < 'A' || c > 'Z') return false;
+  }
+  return true;
+}
+
 void to_json(nlohmann::json& j, const FirmwareState& v) {
   j = {{"current_version", v.current_version},
        {"target_version", v.target_version},
@@ -26,6 +34,7 @@ void to_json(nlohmann::json& j, const DrawerHealth& v) {
 
 void to_json(nlohmann::json& j, const DenominationInventory& v) {
   j = {{"denomination", v.denomination},
+       {"currency_code", v.currency_code},
        {"quantity", v.quantity},
        {"capacity", v.capacity},
        {"consumption_per_hour", v.consumption_per_hour},
@@ -33,9 +42,13 @@ void to_json(nlohmann::json& j, const DenominationInventory& v) {
 }
 
 void to_json(nlohmann::json& j, const InventoryState& v) {
-  j = nlohmann::json::object();
+  j = {{"currency_code", v.currency_code},
+       {"country_code", v.country_code},
+       {"region", v.region},
+       {"compliance_tags", v.compliance_tags},
+       {"denominations", nlohmann::json::object()}};
   for (const auto& item : v.denominations) {
-    j[item.first] = item.second;
+    j["denominations"][item.first] = item.second;
   }
 }
 
@@ -87,7 +100,23 @@ void to_json(nlohmann::json& j, const Alert& v) {
 
 void to_json(nlohmann::json& j, const DrawerTwin& v) {
   j = {{"drawer_id", v.drawer_id},
+       {"device_id", v.device_id},
        {"merchant_id", v.merchant_id},
+       {"region", v.region},
+       {"environment", v.environment},
+       {"deployment_channel", v.deployment_channel},
+       {"country_code", v.country_code},
+       {"compliance_tags", v.compliance_tags},
+       {"enrolled", v.enrolled},
+       {"disabled", v.disabled},
+       {"enrollment_state", v.enrollment_state},
+       {"enrollment_token_hash", v.enrollment_token_hash},
+       {"sync_status", v.sync_status},
+       {"last_synced_at", v.last_synced_at},
+       {"revision", v.revision},
+       {"remote_revision", v.remote_revision},
+       {"conflict", v.conflict},
+       {"conflict_reason", v.conflict_reason},
        {"firmware", v.firmware},
        {"hardware_revision", v.firmware.hardware_revision},
        {"health", v.health},
@@ -126,6 +155,7 @@ void from_json(const nlohmann::json& j, DrawerHealth& v) {
 
 void from_json(const nlohmann::json& j, DenominationInventory& v) {
   v.denomination = j.value("denomination", v.denomination);
+  v.currency_code = j.value("currency_code", v.currency_code);
   v.quantity = j.value("quantity", v.quantity);
   v.capacity = j.value("capacity", v.capacity);
   v.consumption_per_hour = j.value("consumption_per_hour", v.consumption_per_hour);
@@ -135,8 +165,19 @@ void from_json(const nlohmann::json& j, DenominationInventory& v) {
 void from_json(const nlohmann::json& j, InventoryState& v) {
   v.denominations.clear();
   if (!j.is_object()) return;
-  for (const auto& item : j.items()) {
-    v.denominations[item.key()] = item.value().get<DenominationInventory>();
+  v.currency_code = j.value("currency_code", v.currency_code);
+  v.country_code = j.value("country_code", v.country_code);
+  v.region = j.value("region", v.region);
+  v.compliance_tags = j.value("compliance_tags", v.compliance_tags);
+  const auto& denoms = j.contains("denominations") ? j.at("denominations") : j;
+  for (const auto& item : denoms.items()) {
+    if (item.key() == "currency_code" || item.key() == "country_code" || item.key() == "region" ||
+        item.key() == "compliance_tags") {
+      continue;
+    }
+    auto denom = item.value().get<DenominationInventory>();
+    if (denom.currency_code.empty()) denom.currency_code = v.currency_code;
+    v.denominations[item.key()] = denom;
   }
 }
 
@@ -189,7 +230,23 @@ void from_json(const nlohmann::json& j, Alert& v) {
 
 void from_json(const nlohmann::json& j, DrawerTwin& v) {
   v.drawer_id = j.value("drawer_id", v.drawer_id);
+  v.device_id = j.value("device_id", v.device_id);
   v.merchant_id = j.value("merchant_id", v.merchant_id);
+  v.region = j.value("region", v.region);
+  v.environment = j.value("environment", v.environment);
+  v.deployment_channel = j.value("deployment_channel", v.deployment_channel);
+  v.country_code = j.value("country_code", v.country_code);
+  v.compliance_tags = j.value("compliance_tags", v.compliance_tags);
+  v.enrolled = j.value("enrolled", v.enrolled);
+  v.disabled = j.value("disabled", v.disabled);
+  v.enrollment_state = j.value("enrollment_state", v.enrollment_state);
+  v.enrollment_token_hash = j.value("enrollment_token_hash", v.enrollment_token_hash);
+  v.sync_status = j.value("sync_status", v.sync_status);
+  v.last_synced_at = j.value("last_synced_at", v.last_synced_at);
+  v.revision = j.value("revision", v.revision);
+  v.remote_revision = j.value("remote_revision", v.remote_revision);
+  v.conflict = j.value("conflict", v.conflict);
+  v.conflict_reason = j.value("conflict_reason", v.conflict_reason);
   if (j.contains("firmware")) v.firmware = j.at("firmware").get<FirmwareState>();
   if (j.contains("health")) v.health = j.at("health").get<DrawerHealth>();
   if (j.contains("inventory")) v.inventory = j.at("inventory").get<InventoryState>();

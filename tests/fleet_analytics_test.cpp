@@ -2,11 +2,13 @@
 
 #include <algorithm>
 #include <filesystem>
+#include <memory>
 
 #include "cloud/analytics/alert_engine.hpp"
 #include "cloud/analytics/health_scoring.hpp"
 #include "cloud/analytics/inventory_forecast.hpp"
 #include "cloud/analytics/predictive_maintenance.hpp"
+#include "cloud/control_plane/device_twin_control_plane.hpp"
 #include "cloud/fleet_manager/fleet_manager.hpp"
 
 using cloud::analytics::AlertEngine;
@@ -18,6 +20,51 @@ using cloud::device_twin::DrawerHealth;
 using cloud::device_twin::DrawerTwin;
 using cloud::device_twin::InventoryState;
 using cloud::fleet_manager::FleetManager;
+
+namespace {
+
+class FakeControlPlane : public cloud::control_plane::DeviceTwinControlPlane {
+ public:
+  bool fail{false};
+  bool conflict{false};
+  bool disabled{false};
+  int remote_revision{0};
+  int disabled_checks{0};
+  int pushes{0};
+
+  cloud::control_plane::EnrollmentResult enroll(
+      const cloud::control_plane::EnrollmentRequest& request) override {
+    DrawerTwin twin = cloud::fleet_manager::make_local_default_twin();
+    twin.drawer_id = request.device_id;
+    twin.device_id = request.device_id;
+    twin.merchant_id = request.merchant_id;
+    twin.region = request.region;
+    twin.environment = request.environment;
+    twin.deployment_channel = request.deployment_channel;
+    twin.enrolled = !request.enrollment_token.empty();
+    twin.disabled = disabled;
+    twin.enrollment_state = twin.enrolled ? "enrolled" : "missing_token";
+    return {twin.enrolled && !disabled, disabled, twin.enrollment_state, twin};
+  }
+
+  cloud::control_plane::SyncResult push_twin(const DrawerTwin& twin) override {
+    ++pushes;
+    DrawerTwin remote = twin;
+    remote.revision = remote_revision > 0 ? remote_revision : twin.revision;
+    if (disabled) return {false, false, true, "device_disabled", remote};
+    if (conflict) return {false, true, false, "remote_revision_conflict", remote};
+    if (fail) return {false, false, false, "remote_unavailable", remote};
+    return {true, false, false, "", remote};
+  }
+
+  std::optional<DrawerTwin> fetch_twin(const std::string&) override { return std::nullopt; }
+  bool is_device_disabled(const std::string&) override {
+    ++disabled_checks;
+    return disabled;
+  }
+};
+
+}  // namespace
 
 TEST(FleetAnalytics, HealthScorePenalizesKnownFailureSignals) {
   DrawerHealth input;
@@ -56,8 +103,8 @@ TEST(FleetAnalytics, PredictiveMaintenancePromotesCriticalRisk) {
 
 TEST(FleetAnalytics, InventoryForecastFindsSoonestDepletion) {
   InventoryState state;
-  state.denominations["quarter"] = DenominationInventory{"quarter", 24, 400, 4.0, "now"};
-  state.denominations["dime"] = DenominationInventory{"dime", 200, 300, 2.0, "now"};
+  state.denominations["quarter"] = DenominationInventory{"quarter", "USD", 24, 400, 4.0, "now"};
+  state.denominations["dime"] = DenominationInventory{"dime", "USD", 200, 300, 2.0, "now"};
 
   auto forecast = InventoryForecastEngine().forecast(state);
 
@@ -127,4 +174,69 @@ TEST(FleetAnalytics, DeviceTwinPersistsAcrossManagerRestart) {
   EXPECT_EQ(42, loaded->inventory.denominations["quarter"].quantity);
   ASSERT_FALSE(loaded->history.empty());
   EXPECT_EQ("inventory_refill", loaded->history.back().type);
+}
+
+TEST(FleetAnalytics, ControlPlaneSyncSuccessFailureConflictAndRevocation) {
+  auto control = std::make_shared<FakeControlPlane>();
+  FleetManager manager("", control);
+  auto twin = cloud::fleet_manager::make_local_default_twin();
+  twin.drawer_id = "drawer-sync";
+  twin.device_id = "device-sync";
+  EXPECT_TRUE(manager.submit_update(twin));
+  auto synced = manager.get("drawer-sync");
+  ASSERT_TRUE(synced);
+  EXPECT_EQ("synced", synced->sync_status);
+  EXPECT_FALSE(synced->conflict);
+
+  control->fail = true;
+  EXPECT_TRUE(manager.submit_update(twin));
+  auto failed = manager.get("drawer-sync");
+  ASSERT_TRUE(failed);
+  EXPECT_EQ("sync_failed", failed->sync_status);
+
+  control->fail = false;
+  control->conflict = true;
+  control->remote_revision = 99;
+  EXPECT_FALSE(manager.submit_update(twin));
+  auto conflicted = manager.get("drawer-sync");
+  ASSERT_TRUE(conflicted);
+  EXPECT_EQ("conflict", conflicted->sync_status);
+  EXPECT_TRUE(conflicted->conflict);
+  EXPECT_EQ(99, conflicted->remote_revision);
+
+  control->conflict = false;
+  control->disabled = true;
+  auto revoked = cloud::fleet_manager::make_local_default_twin();
+  revoked.drawer_id = "drawer-sync";
+  revoked.device_id = "device-sync";
+  int pushes_before_revocation = control->pushes;
+  EXPECT_FALSE(manager.submit_update(revoked));
+  EXPECT_GT(control->disabled_checks, 0);
+  EXPECT_EQ(pushes_before_revocation, control->pushes);
+  auto disabled = manager.get("drawer-sync");
+  ASSERT_TRUE(disabled);
+  EXPECT_TRUE(disabled->disabled);
+  EXPECT_EQ("disabled", disabled->sync_status);
+}
+
+TEST(FleetAnalytics, EnrollmentCarriesInternationalDeploymentMetadata) {
+  auto control = std::make_shared<FakeControlPlane>();
+  FleetManager manager("", control);
+  auto result = manager.enroll({"device-ke-1", "merchant-7", "KE-NBO", "pilot", "pilot", "token"});
+  ASSERT_TRUE(result.ok);
+  auto twin = manager.get("device-ke-1");
+  ASSERT_TRUE(twin);
+  EXPECT_EQ("device-ke-1", twin->device_id);
+  EXPECT_EQ("merchant-7", twin->merchant_id);
+  EXPECT_EQ("KE-NBO", twin->region);
+  EXPECT_EQ("pilot", twin->environment);
+  EXPECT_EQ("pilot", twin->deployment_channel);
+  EXPECT_TRUE(twin->enrolled);
+}
+
+TEST(FleetAnalytics, CurrencyCodesAreValidatedAndPersisted) {
+  EXPECT_TRUE(cloud::device_twin::valid_currency_code("USD"));
+  EXPECT_TRUE(cloud::device_twin::valid_currency_code("KES"));
+  EXPECT_FALSE(cloud::device_twin::valid_currency_code("usd"));
+  EXPECT_FALSE(cloud::device_twin::valid_currency_code("US"));
 }

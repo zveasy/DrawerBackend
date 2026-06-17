@@ -204,6 +204,16 @@ void HttpServer::setup_routes() {
         return httplib::Server::HandlerResponse::Handled;
       }
     }
+    if (req.path == "/txn" || req.path == "/command") {
+      auto local = cloud::fleet_manager::default_manager().get("local-drawer");
+      if (local && local->disabled) {
+        res.status = 423;
+        res.set_content("{\"error\":\"device_disabled\"}", "application/json");
+        util::log(util::LogLevel::Warn, "device_command_blocked",
+                  {{"src", req.remote_addr}, {"route", req.path}, {"reason", "disabled"}});
+        return httplib::Server::HandlerResponse::Handled;
+      }
+    }
     if (!authorize(req, res)) {
       log_err("unauthorized");
       return httplib::Server::HandlerResponse::Handled;

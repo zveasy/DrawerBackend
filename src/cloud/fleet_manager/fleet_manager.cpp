@@ -22,7 +22,9 @@ std::string id_for(const std::string& prefix, const std::string& drawer_id, size
 
 }  // namespace
 
-FleetManager::FleetManager(std::string store_path) : store_path_(std::move(store_path)) {
+FleetManager::FleetManager(std::string store_path,
+                           std::shared_ptr<control_plane::DeviceTwinControlPlane> control_plane)
+    : store_path_(std::move(store_path)), control_plane_(std::move(control_plane)) {
   load_store();
 }
 
@@ -89,6 +91,56 @@ device_twin::DrawerTwin FleetManager::enrich(device_twin::DrawerTwin twin) const
   return twin;
 }
 
+bool FleetManager::submit_update(device_twin::DrawerTwin twin) {
+  if (twin.drawer_id.empty()) {
+    return false;
+  }
+  if (control_plane_ && !twin.device_id.empty() && control_plane_->is_device_disabled(twin.device_id)) {
+    auto enriched = enrich(std::move(twin));
+    enriched.disabled = true;
+    enriched.sync_status = "disabled";
+    enriched.conflict = false;
+    enriched.conflict_reason.clear();
+    std::lock_guard<std::mutex> lk(mu_);
+    twins_[enriched.drawer_id] = std::move(enriched);
+    save_store_locked();
+    publish_metrics_locked(metrics_locked());
+    return false;
+  }
+  auto enriched = enrich(std::move(twin));
+  if (enriched.disabled) return false;
+  enriched.revision += 1;
+  if (control_plane_) {
+    auto sync = control_plane_->push_twin(enriched);
+    if (sync.disabled) {
+      enriched.disabled = true;
+      enriched.sync_status = "disabled";
+      enriched.conflict = false;
+      enriched.conflict_reason.clear();
+    } else if (sync.conflict) {
+      enriched.sync_status = "conflict";
+      enriched.conflict = true;
+      enriched.conflict_reason = sync.reason.empty() ? "remote_revision_conflict" : sync.reason;
+      enriched.remote_revision = sync.twin.revision;
+    } else if (sync.ok) {
+      enriched.sync_status = "synced";
+      enriched.last_synced_at = now_iso();
+      enriched.conflict = false;
+      enriched.conflict_reason.clear();
+      enriched.remote_revision = sync.twin.revision;
+    } else {
+      enriched.sync_status = "sync_failed";
+      enriched.conflict = false;
+      enriched.conflict_reason = sync.reason;
+    }
+  }
+  std::lock_guard<std::mutex> lk(mu_);
+  twins_[enriched.drawer_id] = enriched;
+  save_store_locked();
+  publish_metrics_locked(metrics_locked());
+  return !enriched.disabled && !enriched.conflict;
+}
+
 void FleetManager::upsert(device_twin::DrawerTwin twin) {
   if (twin.drawer_id.empty()) {
     return;
@@ -98,6 +150,13 @@ void FleetManager::upsert(device_twin::DrawerTwin twin) {
   twins_[enriched.drawer_id] = enriched;
   save_store_locked();
   publish_metrics_locked(metrics_locked());
+}
+
+control_plane::EnrollmentResult FleetManager::enroll(const control_plane::EnrollmentRequest& request) {
+  if (!control_plane_) return {false, false, "control_plane_unavailable", {}};
+  auto result = control_plane_->enroll(request);
+  if (result.ok) upsert(result.twin);
+  return result;
 }
 
 std::vector<device_twin::DrawerTwin> FleetManager::list() const {
@@ -181,7 +240,17 @@ device_twin::DrawerTwin make_local_default_twin() {
   auto ts = now_iso();
   device_twin::DrawerTwin twin;
   twin.drawer_id = "local-drawer";
+  twin.device_id = "local-device";
   twin.merchant_id = "local-merchant";
+  twin.region = "local";
+  twin.environment = "development";
+  twin.deployment_channel = "dev";
+  twin.country_code = "US";
+  twin.enrolled = true;
+  twin.enrollment_state = "local";
+  twin.inventory.currency_code = "USD";
+  twin.inventory.country_code = "US";
+  twin.inventory.region = "local";
   twin.firmware.current_version = "1.0.0";
   twin.firmware.target_version = "1.0.0";
   twin.firmware.hardware_revision = "revA";
@@ -191,10 +260,10 @@ device_twin::DrawerTwin make_local_default_twin() {
   twin.health.motor_cycles = 2500;
   twin.health.transaction_latency_ms = 450.0;
   twin.health.uptime_percent = 99.9;
-  twin.inventory.denominations["quarter"] = {"quarter", 220, 400, 12.0, ts};
-  twin.inventory.denominations["dime"] = {"dime", 180, 300, 4.0, ts};
-  twin.inventory.denominations["nickel"] = {"nickel", 150, 250, 2.0, ts};
-  twin.inventory.denominations["penny"] = {"penny", 300, 500, 6.0, ts};
+  twin.inventory.denominations["quarter"] = {"quarter", "USD", 220, 400, 12.0, ts};
+  twin.inventory.denominations["dime"] = {"dime", "USD", 180, 300, 4.0, ts};
+  twin.inventory.denominations["nickel"] = {"nickel", "USD", 150, 250, 2.0, ts};
+  twin.inventory.denominations["penny"] = {"penny", "USD", 300, 500, 6.0, ts};
   twin.history.push_back({"hist-local-drawer-1", "telemetry", "device twin initialized", ts,
                           {{"source", "local_runtime"}}});
   return twin;

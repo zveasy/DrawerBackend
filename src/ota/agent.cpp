@@ -61,7 +61,33 @@ static std::string extract_string(const std::string& json, const std::string& ke
 static int extract_stage(const std::string& json, const std::string& key) {
   auto pos = json.find("\""+key+"\""); if(pos==std::string::npos) return 100; pos = json.find(':',pos); if(pos==std::string::npos) return 100; size_t end = json.find_first_not_of("0123456789", pos+1); return std::stoi(json.substr(pos+1,end-pos-1)); }
 
+class FileManifestFetcher : public IManifestFetcher {
+public:
+  OtaResult fetch(const std::string& url, std::string& manifest) override {
+    if (url.rfind("file://",0)!=0) return {false, "bad feed"};
+    manifest = read_file(url.substr(7));
+    return manifest.empty() ? OtaResult{false, "bad feed"} : OtaResult{true, ""};
+  }
+};
+
+static bool supported_channel(const std::string& channel) {
+  return channel == "dev" || channel == "pilot" || channel == "stable";
+}
+
+static bool contains_token(const std::string& json, const std::string& key, const std::string& token) {
+  if (token.empty()) return false;
+  auto pos = json.find("\""+key+"\"");
+  if (pos == std::string::npos) return false;
+  auto end = json.find(']', pos);
+  if (end == std::string::npos) end = json.find('}', pos);
+  if (end == std::string::npos) return false;
+  return json.substr(pos, end - pos).find(token) != std::string::npos;
+}
+
 Agent::Agent(const cfg::Config& cfg, IOtaBackend& backend) : cfg_(cfg), backend_(backend) {}
+
+Agent::Agent(const cfg::Config& cfg, IOtaBackend& backend, IManifestFetcher& fetcher)
+    : cfg_(cfg), backend_(backend), fetcher_(&fetcher) {}
 
 int Agent::hash_device(const std::string& id) { return static_cast<int>(std::hash<std::string>{}(id)%100); }
 bool Agent::allow(int h, int percent) { return h < percent; }
@@ -69,15 +95,22 @@ bool Agent::allow(int h, int percent) { return h < percent; }
 OtaResult Agent::run_once() {
   if (!cfg_.ota.enable) return {false, "disabled"};
   State st; load_state(cfg_, st);
-  if (cfg_.ota.feed_url.rfind("file://",0)!=0) return {false, "bad feed"};
-  std::string feed_path = cfg_.ota.feed_url.substr(7);
-  std::string manifest = read_file(feed_path);
+  std::string manifest;
+  FileManifestFetcher default_fetcher;
+  auto fres = (fetcher_ ? fetcher_ : &default_fetcher)->fetch(cfg_.ota.feed_url, manifest);
+  if (!fres.ok) return fres;
   std::string channel = extract_string(manifest, "channel");
+  if (!supported_channel(channel)) return {false, "channel"};
   if (channel != cfg_.ota.channel) return {false,"channel"};
   std::string version = extract_string(manifest, "version");
   if (version <= st.current_version) return {false, "version"};
+  std::string device_id = cfg_.aws.thing_name.empty() ? cfg_.aws.client_id : cfg_.aws.thing_name;
+  if (contains_token(manifest, "revoked_devices", device_id)) return {false, "revoked"};
+  int rollout = extract_stage(manifest, "rollout_percent");
+  if (!allow(hash_device(device_id), rollout)) return {false, "rollout"};
   std::string artifact = extract_string(manifest, "artifact_url");
   std::string sha = extract_string(manifest, "sha256");
+  if (sha.empty()) return {false, "sha"};
   std::string sig = extract_string(manifest, "sig_ed25519");
   std::string verify_payload = manifest;
   auto spos = verify_payload.find("\"sig_ed25519\"");

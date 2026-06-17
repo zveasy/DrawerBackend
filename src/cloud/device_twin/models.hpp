@@ -30,6 +30,7 @@ struct DrawerHealth {
 
 struct DenominationInventory {
   std::string denomination;
+  std::string currency_code{"USD"};
   int quantity{0};
   int capacity{0};
   double consumption_per_hour{0.0};
@@ -37,6 +38,10 @@ struct DenominationInventory {
 };
 
 struct InventoryState {
+  std::string currency_code{"USD"};
+  std::string country_code;
+  std::string region;
+  std::vector<std::string> compliance_tags;
   std::map<std::string, DenominationInventory> denominations;
 };
 
@@ -88,7 +93,23 @@ struct Alert {
 
 struct DrawerTwin {
   std::string drawer_id;
+  std::string device_id;
   std::string merchant_id;
+  std::string region;
+  std::string environment{"development"};
+  std::string deployment_channel{"dev"};
+  std::string country_code;
+  std::vector<std::string> compliance_tags;
+  bool enrolled{false};
+  bool disabled{false};
+  std::string enrollment_state{"local"};
+  std::string enrollment_token_hash;
+  std::string sync_status{"local"};
+  std::string last_synced_at;
+  int revision{0};
+  int remote_revision{0};
+  bool conflict{false};
+  std::string conflict_reason;
   FirmwareState firmware;
   DrawerHealth health;
   InventoryState inventory;
@@ -102,6 +123,8 @@ struct DrawerTwin {
   InventoryForecast inventory_forecast;
   std::vector<Alert> alerts;
 };
+
+bool valid_currency_code(const std::string& code);
 
 void to_json(nlohmann::json& j, const FirmwareState& v);
 void to_json(nlohmann::json& j, const DrawerHealth& v);

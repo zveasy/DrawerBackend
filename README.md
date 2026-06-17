@@ -46,10 +46,31 @@ Common runtime modes:
 ./build/register_mvp --api 8080 --tui
 ```
 
+## Pilot Cloud Architecture
+
+DrawerBackend remains a local hardware daemon first: dispensing, shutter,
+hopper, scale, POS, and emergency service behavior continue to run on the
+appliance. The pilot cloud layer adds a control-plane abstraction around device
+twins so a cloud service can become the source of truth while the appliance
+keeps a durable local JSON cache for offline operation.
+
+Pilot device twins now carry deployment metadata (`device_id`, `merchant_id`,
+`region`, `environment`, and `deployment_channel`), sync state
+(`sync_status`, `last_synced_at`, local/remote revisions, and conflict flags),
+and international inventory metadata. Disabled or revoked devices are prevented
+from submitting fleet updates, receiving local commands, or applying OTA
+updates.
+
+See [docs/device_enrollment.md](docs/device_enrollment.md),
+[docs/international_deployment.md](docs/international_deployment.md),
+[docs/ota_safety_model.md](docs/ota_safety_model.md), and
+[docs/production_gaps.md](docs/production_gaps.md).
+
 ## Fleet API
 
 The local HTTP server exposes read-only fleet intelligence endpoints seeded with
-the local drawer twin in development and persisted to a local JSON twin store:
+the local drawer twin in development, persisted to a local JSON twin cache, and
+prepared to sync through the cloud control-plane interface:
 
 - `GET /fleet/devices`
 - `GET /fleet/device/{id}`
@@ -102,7 +123,9 @@ ctest --test-dir build --output-on-failure
 ```
 
 New fleet tests cover health scoring, predictive maintenance, inventory
-forecasting, alert generation, device history, and fleet API responses.
+forecasting, alert generation, device history, fleet API responses, cloud sync
+state, enrollment metadata, conflict handling, and international inventory
+validation.
 
 HTTP integration tests bind ephemeral ports on `127.0.0.1`; restricted
 sandboxes that block local socket binding must run those tests with permission to
@@ -111,6 +134,14 @@ network access, real GPIO hardware, or host firewall configuration.
 
 Real `.env` files and key/certificate material are intentionally ignored. Use
 `.env.example` and `backend/api/.env.example` as templates.
+
+TypeScript dependency hygiene for the Square webhook backend:
+
+```bash
+cd backend/api
+npm run audit:pilot
+npm run sbom
+```
 
 ## Documentation
 
