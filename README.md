@@ -67,6 +67,12 @@ lifecycle tracking, and OTA release eligibility APIs. The local JSON twin store
 remains the offline cache and an offline sync queue preserves device updates
 while the cloud endpoint is unavailable.
 
+Generation 1 adds a centralized fleet-control plane for organizations,
+merchants, branches, regions, device registry, heartbeats, remote commands,
+alerts, metrics, audit events, and dashboard views. The APIs are tenant-aware
+through `X-Org-Id` and protected by the same fail-closed API authentication as
+the existing appliance and fleet routes.
+
 See [docs/device_enrollment.md](docs/device_enrollment.md),
 [docs/international_deployment.md](docs/international_deployment.md),
 [docs/ota_safety_model.md](docs/ota_safety_model.md), and
@@ -74,7 +80,8 @@ See [docs/device_enrollment.md](docs/device_enrollment.md),
 contracts are documented in [docs/cloud_sync_contract.md](docs/cloud_sync_contract.md),
 [docs/production_enrollment_flow.md](docs/production_enrollment_flow.md),
 [docs/ota_release_lifecycle.md](docs/ota_release_lifecycle.md), and
-[docs/mtls_lifecycle.md](docs/mtls_lifecycle.md).
+[docs/mtls_lifecycle.md](docs/mtls_lifecycle.md). Generation 1 fleet operations
+are documented in [docs/fleet_control_plane.md](docs/fleet_control_plane.md).
 
 ## Fleet API
 
@@ -91,6 +98,10 @@ prepared to sync through the cloud control-plane interface:
 
 These endpoints are additive to the existing `/txn`, `/command`, `/status`,
 `/metrics`, `/metrics.json`, and `/help` routes.
+
+Centralized fleet-control endpoints are exposed under `/fleet-control/v1/*` for
+organizations, merchants, branches, regions, devices, commands, alerts, metrics,
+and dashboard views.
 
 Production and non-loopback API binds require authentication. Set
 `REGISTER_MVP_API_TOKEN` or `pos.key` and send `Authorization: Bearer <token>`

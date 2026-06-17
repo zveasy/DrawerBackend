@@ -11,6 +11,7 @@
 #include "server/version_endpoint.hpp"
 #include "server/docs_endpoint.hpp"
 #include "cloud/fleet_manager/fleet_routes.hpp"
+#include "cloud/fleet_control/routes.hpp"
 #include "ops/operational_status.hpp"
 #include "util/log.hpp"
 
@@ -177,6 +178,8 @@ void HttpServer::setup_routes() {
     return false;
   };
   cloud::fleet_manager::register_fleet_routes(svr, cloud::fleet_manager::default_manager(), authorize);
+  cloud::fleet_control::register_fleet_control_routes(
+      svr, cloud::fleet_control::default_control_plane(), authorize);
 
   svr.set_pre_routing_handler([this, authorize](const httplib::Request& req,
                                                httplib::Response& res) {
