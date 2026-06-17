@@ -1,9 +1,10 @@
 # DrawerBackend
 
-DrawerBackend is a C++17 hardware backend and cloud-ready fleet platform for a
-cash/change dispensing appliance. It controls local drawer hardware, exposes POS
-and service APIs, reports telemetry, supports OTA updates, and now models each
-physical drawer as a cloud-managed device twin.
+DrawerBackend is a C++17 hardware backend, cloud-ready fleet platform, and
+cash-operations engine for a cash/change dispensing appliance. It controls local
+drawer hardware, exposes POS and service APIs, reports telemetry, supports OTA
+updates, models each drawer as a cloud-managed device twin, and reconciles cash
+movement against physical drawer state.
 
 ## Architecture
 
@@ -19,6 +20,9 @@ features:
 - **Cloud and fleet:** AWS-style telemetry queueing, shadow updates, device twin
   models, fleet manager, health scoring, predictive maintenance, inventory
   forecasting, alerts, and aggregate fleet metrics.
+- **Cash intelligence:** durable cash ledger, reconciliation engine,
+  denomination inventory, deterministic cash forecasting, anomaly detection,
+  cash health scores, and cash dashboard models.
 - **Operations:** Docker Compose, systemd packaging, hardening scripts, CI,
   Kubernetes Helm chart, Terraform scaffolding, and support documentation.
 - **Square backend:** a separate TypeScript/Express service under `backend/api`
@@ -73,6 +77,12 @@ alerts, metrics, audit events, and dashboard views. The APIs are tenant-aware
 through `X-Org-Id` and protected by the same fail-closed API authentication as
 the existing appliance and fleet routes.
 
+Generation 2 adds cash intelligence and reconciliation: every cash-affecting
+event can be recorded in a durable ledger, reconciled against observed drawer
+state, analyzed for denomination drift and deterministic depletion forecasts,
+scored for cash health, and surfaced through tenant-aware cash dashboards.
+Anomaly detection raises fleet alerts when a fleet control plane is attached.
+
 See [docs/device_enrollment.md](docs/device_enrollment.md),
 [docs/international_deployment.md](docs/international_deployment.md),
 [docs/ota_safety_model.md](docs/ota_safety_model.md), and
@@ -82,6 +92,8 @@ contracts are documented in [docs/cloud_sync_contract.md](docs/cloud_sync_contra
 [docs/ota_release_lifecycle.md](docs/ota_release_lifecycle.md), and
 [docs/mtls_lifecycle.md](docs/mtls_lifecycle.md). Generation 1 fleet operations
 are documented in [docs/fleet_control_plane.md](docs/fleet_control_plane.md).
+Generation 2 cash operations are documented in
+[docs/cash_intelligence.md](docs/cash_intelligence.md).
 
 ## Fleet API
 
@@ -102,6 +114,10 @@ These endpoints are additive to the existing `/txn`, `/command`, `/status`,
 Centralized fleet-control endpoints are exposed under `/fleet-control/v1/*` for
 organizations, merchants, branches, regions, devices, commands, alerts, metrics,
 and dashboard views.
+
+Cash intelligence endpoints are exposed under `/cash/v1/*` for ledger entries,
+denomination inventory, reconciliation reports, forecasts, anomalies, cash
+health scores, and cash dashboard views.
 
 Production and non-loopback API binds require authentication. Set
 `REGISTER_MVP_API_TOKEN` or `pos.key` and send `Authorization: Bearer <token>`
@@ -143,10 +159,12 @@ cmake --build build -j
 ctest --test-dir build --output-on-failure
 ```
 
-New fleet tests cover health scoring, predictive maintenance, inventory
+New fleet and cash tests cover health scoring, predictive maintenance, inventory
 forecasting, alert generation, device history, fleet API responses, cloud sync
 state, enrollment metadata, conflict handling, and international inventory
-validation.
+validation, cash ledger persistence, denomination math, reconciliation
+statuses, anomaly alerts, cash health explainability, dashboard aggregation, and
+cash API authorization.
 
 HTTP integration tests bind ephemeral ports on `127.0.0.1`; restricted
 sandboxes that block local socket binding must run those tests with permission to

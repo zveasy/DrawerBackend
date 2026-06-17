@@ -220,6 +220,9 @@ add_library(cloud
   src/cloud/control_plane/http_device_twin_client.cpp
   src/cloud/control_plane/enrollment_service.cpp
   src/cloud/control_plane/twin_contract_server.cpp
+  src/cloud/cash_intelligence/models.cpp
+  src/cloud/cash_intelligence/service.cpp
+  src/cloud/cash_intelligence/routes.cpp
   src/cloud/fleet_control/models.cpp
   src/cloud/fleet_control/control_plane.cpp
   src/cloud/fleet_control/routes.cpp
