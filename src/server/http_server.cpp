@@ -9,6 +9,7 @@
 #include "obs/metrics.hpp"
 #include "server/version_endpoint.hpp"
 #include "server/docs_endpoint.hpp"
+#include "cloud/fleet_manager/fleet_routes.hpp"
 #include "util/log.hpp"
 
 struct HttpServer::Impl {
@@ -94,6 +95,7 @@ void HttpServer::setup_routes() {
   auto& svr = *impl_->server;
   server::register_version_routes(svr);
   server::register_docs_routes(svr);
+  cloud::fleet_manager::register_fleet_routes(svr, cloud::fleet_manager::default_manager());
 
   std::string token = auth_key_;
   std::string basic;

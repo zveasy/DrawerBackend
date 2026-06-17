@@ -208,13 +208,22 @@ add_library(cloud
   src/cloud/shadow.cpp
   src/cloud/tls_identity.cpp
   src/cloud/identity.cpp
+  src/cloud/device_twin/models.cpp
+  src/cloud/analytics/health_scoring.cpp
+  src/cloud/analytics/predictive_maintenance.cpp
+  src/cloud/analytics/inventory_forecast.cpp
+  src/cloud/analytics/alert_engine.cpp
+  src/cloud/fleet_manager/fleet_manager.cpp
+  src/cloud/fleet_manager/fleet_routes.cpp
 )
 target_include_directories(cloud PUBLIC . src)
-target_link_libraries(cloud PUBLIC util)
+target_link_libraries(cloud PUBLIC util obs)
 if(USE_NLOHMANN_JSON)
   target_link_libraries(cloud PUBLIC nlohmann_json::nlohmann_json)
   target_compile_definitions(cloud PUBLIC USE_NLOHMANN_JSON=1)
 endif()
+
+target_link_libraries(server PUBLIC cloud)
 
 # quant
 add_library(quant

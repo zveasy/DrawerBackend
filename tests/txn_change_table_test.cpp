@@ -22,6 +22,7 @@ TEST(TxnChangeTable, Quarters) {
   FakeShutter sh;
   FakeDispenser disp;
   TxnConfig cfg;
+  cfg.present_ms = 0;
   TxnEngine eng(sh, disp, cfg);
   for (int q = 0; q <= 10; ++q) {
     int price = 100;
