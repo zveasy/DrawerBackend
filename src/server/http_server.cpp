@@ -13,6 +13,7 @@
 #include "cloud/cash_intelligence/routes.hpp"
 #include "cloud/fleet_manager/fleet_routes.hpp"
 #include "cloud/fleet_control/routes.hpp"
+#include "integrations/veil/routes.hpp"
 #include "ops/operational_status.hpp"
 #include "util/log.hpp"
 
@@ -183,6 +184,8 @@ void HttpServer::setup_routes() {
       svr, cloud::fleet_control::default_control_plane(), authorize);
   cloud::cash_intelligence::register_cash_intelligence_routes(
       svr, cloud::cash_intelligence::default_cash_service(), authorize);
+  integrations::veil::register_trust_routes(
+      svr, integrations::veil::default_trust_service(), authorize);
 
   svr.set_pre_routing_handler([this, authorize](const httplib::Request& req,
                                                httplib::Response& res) {

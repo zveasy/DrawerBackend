@@ -232,9 +232,13 @@ add_library(cloud
   src/cloud/analytics/alert_engine.cpp
   src/cloud/fleet_manager/fleet_manager.cpp
   src/cloud/fleet_manager/fleet_routes.cpp
+  src/integrations/veil/models.cpp
+  src/integrations/veil/client.cpp
+  src/integrations/veil/service.cpp
+  src/integrations/veil/routes.cpp
 )
 target_include_directories(cloud PUBLIC . src)
-target_link_libraries(cloud PUBLIC util obs ops httplib::httplib Threads::Threads)
+target_link_libraries(cloud PUBLIC util obs ops httplib::httplib Threads::Threads OpenSSL::Crypto)
 if(USE_NLOHMANN_JSON)
   target_link_libraries(cloud PUBLIC nlohmann_json::nlohmann_json)
   target_compile_definitions(cloud PUBLIC USE_NLOHMANN_JSON=1)

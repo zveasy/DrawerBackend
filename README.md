@@ -23,6 +23,9 @@ features:
 - **Cash intelligence:** durable cash ledger, reconciliation engine,
   denomination inventory, deterministic cash forecasting, anomaly detection,
   cash health scores, and cash dashboard models.
+- **Trust evidence:** VEIL client boundary, portable trust evidence records,
+  append-only hash chains, deterministic bundle exports, policy gates, and
+  local trust score summaries.
 - **Operations:** Docker Compose, systemd packaging, hardening scripts, CI,
   Kubernetes Helm chart, Terraform scaffolding, and support documentation.
 - **Square backend:** a separate TypeScript/Express service under `backend/api`
@@ -83,6 +86,12 @@ state, analyzed for denomination drift and deterministic depletion forecasts,
 scored for cash health, and surfaced through tenant-aware cash dashboards.
 Anomaly detection raises fleet alerts when a fleet control plane is attached.
 
+Generation 3 adds VEIL trust evidence integration. Device, cash, command, OTA,
+enrollment, reconciliation, anomaly, and certificate events can be represented
+as portable trust evidence, chained locally, verified deterministically, exported
+as evidence bundles, policy-checked through a clean VEIL client interface, and
+summarized as local trust scores for VEIL ingestion.
+
 See [docs/device_enrollment.md](docs/device_enrollment.md),
 [docs/international_deployment.md](docs/international_deployment.md),
 [docs/ota_safety_model.md](docs/ota_safety_model.md), and
@@ -93,7 +102,9 @@ contracts are documented in [docs/cloud_sync_contract.md](docs/cloud_sync_contra
 [docs/mtls_lifecycle.md](docs/mtls_lifecycle.md). Generation 1 fleet operations
 are documented in [docs/fleet_control_plane.md](docs/fleet_control_plane.md).
 Generation 2 cash operations are documented in
-[docs/cash_intelligence.md](docs/cash_intelligence.md).
+[docs/cash_intelligence.md](docs/cash_intelligence.md). Generation 3 trust
+evidence integration is documented in
+[docs/veil_trust_integration.md](docs/veil_trust_integration.md).
 
 ## Fleet API
 
@@ -118,6 +129,10 @@ and dashboard views.
 Cash intelligence endpoints are exposed under `/cash/v1/*` for ledger entries,
 denomination inventory, reconciliation reports, forecasts, anomalies, cash
 health scores, and cash dashboard views.
+
+Trust evidence endpoints are exposed under `/trust/v1/*` for evidence
+submission, evidence listing, chain verification, deterministic bundle exports,
+policy decision previews, and trust score summaries.
 
 Production and non-loopback API binds require authentication. Set
 `REGISTER_MVP_API_TOKEN` or `pos.key` and send `Authorization: Bearer <token>`
@@ -164,7 +179,11 @@ forecasting, alert generation, device history, fleet API responses, cloud sync
 state, enrollment metadata, conflict handling, and international inventory
 validation, cash ledger persistence, denomination math, reconciliation
 statuses, anomaly alerts, cash health explainability, dashboard aggregation, and
-cash API authorization.
+cash API authorization. VEIL trust tests cover the local client boundary,
+evidence creation, hash chaining, tamper/missing-link/duplicate/out-of-order
+detection, deterministic bundles, policy unavailable behavior, fail-closed
+production gates, local dev allow behavior, trust score explainability, and
+trust API authorization.
 
 HTTP integration tests bind ephemeral ports on `127.0.0.1`; restricted
 sandboxes that block local socket binding must run those tests with permission to
