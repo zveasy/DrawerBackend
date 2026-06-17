@@ -114,5 +114,16 @@ void to_json(nlohmann::json& j, const MaintenanceAssessment& v);
 void to_json(nlohmann::json& j, const InventoryForecast& v);
 void to_json(nlohmann::json& j, const Alert& v);
 void to_json(nlohmann::json& j, const DrawerTwin& v);
+void from_json(const nlohmann::json& j, FirmwareState& v);
+void from_json(const nlohmann::json& j, DrawerHealth& v);
+void from_json(const nlohmann::json& j, DenominationInventory& v);
+void from_json(const nlohmann::json& j, InventoryState& v);
+void from_json(const nlohmann::json& j, FaultEvent& v);
+void from_json(const nlohmann::json& j, MaintenanceRecord& v);
+void from_json(const nlohmann::json& j, HistoryEvent& v);
+void from_json(const nlohmann::json& j, MaintenanceAssessment& v);
+void from_json(const nlohmann::json& j, InventoryForecast& v);
+void from_json(const nlohmann::json& j, Alert& v);
+void from_json(const nlohmann::json& j, DrawerTwin& v);
 
 }  // namespace cloud::device_twin

@@ -3,6 +3,7 @@
 #include <sstream>
 #include <algorithm>
 #include <chrono>
+#include <cstdlib>
 #include <mutex>
 #include <string>
 #include <nlohmann/json.hpp>
@@ -11,6 +12,37 @@
 #include "server/docs_endpoint.hpp"
 #include "cloud/fleet_manager/fleet_routes.hpp"
 #include "util/log.hpp"
+
+namespace {
+
+bool env_true(const char* name) {
+  const char* value = std::getenv(name);
+  return value && (std::string(value) == "1" || std::string(value) == "true" ||
+                   std::string(value) == "TRUE" || std::string(value) == "yes");
+}
+
+bool production_mode() {
+  const char* env = std::getenv("REGISTER_MVP_ENV");
+  const char* node_env = std::getenv("NODE_ENV");
+  return env_true("REGISTER_MVP_PRODUCTION") ||
+         (env && std::string(env) == "production") ||
+         (node_env && std::string(node_env) == "production");
+}
+
+bool is_loopback_bind(const std::string& bind) {
+  return bind.empty() || bind == "127.0.0.1" || bind == "localhost" || bind == "::1";
+}
+
+bool is_health_path(const std::string& path) {
+  return path == "/healthz";
+}
+
+bool is_protected_path(const std::string& path) {
+  if (is_health_path(path)) return false;
+  return true;
+}
+
+}  // namespace
 
 struct HttpServer::Impl {
   std::unique_ptr<httplib::Server> server;
@@ -44,6 +76,7 @@ struct HttpServer::Impl {
   };
   RateLimiter txn_limiter{4.0, 0.1};
   RateLimiter cmd_limiter{4.0, 0.1};
+  bool allow_unauth_loopback{false};
 };
 
 HttpServer::HttpServer(TxnEngine& engine, IShutter& shutter, IDispenser& dispenser)
@@ -55,6 +88,19 @@ bool HttpServer::start(const std::string& bind, int port, const std::string& cer
                        const std::string& key, const std::string& token) {
   if (impl_->th.joinable()) return false;
   auth_key_ = token;
+  if (auth_key_.empty()) {
+    const char* env_token = std::getenv("REGISTER_MVP_API_TOKEN");
+    if (env_token) auth_key_ = env_token;
+  }
+  bool has_auth = !auth_key_.empty();
+  bool loopback = is_loopback_bind(bind);
+  bool prod = production_mode();
+  impl_->allow_unauth_loopback = !has_auth && loopback && !prod;
+  if (!has_auth && (prod || !loopback)) {
+    LOG_ERROR("api_auth_config_unsafe",
+              {{"bind", bind}, {"production", prod ? "1" : "0"}, {"reason", "missing_token"}});
+    return false;
+  }
   if (!cert.empty() && !key.empty()) {
     impl_->server = std::make_unique<httplib::SSLServer>(cert.c_str(), key.c_str());
   } else {
@@ -95,7 +141,6 @@ void HttpServer::setup_routes() {
   auto& svr = *impl_->server;
   server::register_version_routes(svr);
   server::register_docs_routes(svr);
-  cloud::fleet_manager::register_fleet_routes(svr, cloud::fleet_manager::default_manager());
 
   std::string token = auth_key_;
   std::string basic;
@@ -118,8 +163,22 @@ void HttpServer::setup_routes() {
       return out;
     }(":" + token);
   }
-  svr.set_pre_routing_handler([this, token, basic](const httplib::Request& req,
-                                                  httplib::Response& res) {
+  auto authorize = [this, token, basic](const httplib::Request& req, httplib::Response& res) {
+    if (!is_protected_path(req.path)) return true;
+    if (impl_->allow_unauth_loopback) return true;
+    auto auth = req.get_header_value("Authorization");
+    if (!token.empty() && (auth == ("Bearer " + token) || auth == basic)) return true;
+    res.status = 401;
+    res.set_header("WWW-Authenticate", "Basic realm=\"\"");
+    res.set_content("{\"error\":\"unauthorized\"}", "application/json");
+    util::log(util::LogLevel::Warn, "http_auth_failure",
+              {{"src", req.remote_addr}, {"route", req.path}, {"status", "401"}});
+    return false;
+  };
+  cloud::fleet_manager::register_fleet_routes(svr, cloud::fleet_manager::default_manager(), authorize);
+
+  svr.set_pre_routing_handler([this, authorize](const httplib::Request& req,
+                                               httplib::Response& res) {
     auto log_err = [&](const std::string& reason) {
       if (req.path == "/txn" || req.path == "/command") {
         auto lvl = res.status >= 500 ? util::LogLevel::Error : util::LogLevel::Warn;
@@ -145,14 +204,7 @@ void HttpServer::setup_routes() {
         return httplib::Server::HandlerResponse::Handled;
       }
     }
-    if (!token.empty()) {
-      auto auth = req.get_header_value("Authorization");
-      if (auth == ("Bearer " + token) || auth == basic) {
-        return httplib::Server::HandlerResponse::Unhandled;
-      }
-      res.status = 401;
-      res.set_header("WWW-Authenticate", "Basic realm=\"\"");
-      res.set_content("{\"error\":\"unauthorized\"}", "application/json");
+    if (!authorize(req, res)) {
       log_err("unauthorized");
       return httplib::Server::HandlerResponse::Handled;
     }
@@ -301,30 +353,12 @@ void HttpServer::setup_routes() {
                {"reason", "bad_request"}});
   });
 
-  svr.Get("/metrics", [token, basic](const httplib::Request& req, httplib::Response& res) {
-    if (!token.empty()) {
-      auto auth = req.get_header_value("Authorization");
-      if (auth != ("Bearer " + token) && auth != basic) {
-        res.status = 401;
-        res.set_header("WWW-Authenticate", "Basic realm=\"\"");
-        res.set_content("{\"error\":\"unauthorized\"}", "application/json");
-        return;
-      }
-    }
+  svr.Get("/metrics", [](const httplib::Request&, httplib::Response& res) {
     std::ostringstream oss;
     obs::M().to_prometheus(oss);
     res.set_content(oss.str(), "text/plain");
   });
-  svr.Get("/metrics.json", [token, basic](const httplib::Request& req, httplib::Response& res) {
-    if (!token.empty()) {
-      auto auth = req.get_header_value("Authorization");
-      if (auth != ("Bearer " + token) && auth != basic) {
-        res.status = 401;
-        res.set_header("WWW-Authenticate", "Basic realm=\"\"");
-        res.set_content("{\"error\":\"unauthorized\"}", "application/json");
-        return;
-      }
-    }
+  svr.Get("/metrics.json", [](const httplib::Request&, httplib::Response& res) {
     std::ostringstream oss;
     obs::M().to_json(oss);
     res.set_content(oss.str(), "application/json");

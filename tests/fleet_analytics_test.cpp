@@ -1,6 +1,7 @@
 #include <gtest/gtest.h>
 
 #include <algorithm>
+#include <filesystem>
 
 #include "cloud/analytics/alert_engine.hpp"
 #include "cloud/analytics/health_scoring.hpp"
@@ -104,4 +105,26 @@ TEST(FleetAnalytics, FleetManagerMaintainsHistoryAndAggregateMetrics) {
   EXPECT_EQ(1, metrics.online_drawers);
   EXPECT_EQ(1, metrics.unhealthy_drawers);
   EXPECT_GT(metrics.active_alarms, 0);
+}
+
+TEST(FleetAnalytics, DeviceTwinPersistsAcrossManagerRestart) {
+  auto tmp = std::filesystem::temp_directory_path() / "fleet_twin_store.json";
+  std::filesystem::remove(tmp);
+  {
+    FleetManager manager(tmp.string());
+    auto twin = cloud::fleet_manager::make_local_default_twin();
+    twin.drawer_id = "drawer-persisted";
+    twin.health.jam_count = 4;
+    twin.inventory.denominations["quarter"].quantity = 42;
+    manager.upsert(twin);
+    manager.record_history("drawer-persisted", {"", "inventory_refill", "quarters refilled", "", {}});
+  }
+
+  FleetManager restarted(tmp.string());
+  auto loaded = restarted.get("drawer-persisted");
+  ASSERT_TRUE(loaded);
+  EXPECT_EQ("drawer-persisted", loaded->drawer_id);
+  EXPECT_EQ(42, loaded->inventory.denominations["quarter"].quantity);
+  ASSERT_FALSE(loaded->history.empty());
+  EXPECT_EQ("inventory_refill", loaded->history.back().type);
 }

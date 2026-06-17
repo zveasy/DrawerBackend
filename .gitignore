@@ -1,4 +1,8 @@
 build*/
+node_modules/
+**/node_modules/
+dist/
+**/dist/
 *.o
 *.obj
 *.exe
@@ -15,3 +19,14 @@ build*/
 
 # Local logs mounted by docker-compose
 logs/
+
+# Local environment and secrets
+.env
+**/.env
+*.pem
+*.key
+*.crt
+*.p12
+*.pfx
+!.env.example
+!**/.env.example

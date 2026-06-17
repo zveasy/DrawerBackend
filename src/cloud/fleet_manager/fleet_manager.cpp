@@ -1,12 +1,16 @@
 #include "cloud/fleet_manager/fleet_manager.hpp"
 
 #include <chrono>
+#include <cstdlib>
 #include <ctime>
+#include <filesystem>
+#include <fstream>
 #include <iomanip>
 #include <numeric>
 #include <sstream>
 
 #include "obs/metrics.hpp"
+#include "util/log.hpp"
 
 namespace cloud::fleet_manager {
 
@@ -17,6 +21,10 @@ std::string id_for(const std::string& prefix, const std::string& drawer_id, size
 }
 
 }  // namespace
+
+FleetManager::FleetManager(std::string store_path) : store_path_(std::move(store_path)) {
+  load_store();
+}
 
 std::string now_iso() {
   auto tp = std::chrono::system_clock::now();
@@ -41,6 +49,37 @@ void to_json(nlohmann::json& j, const FleetMetrics& v) {
        {"active_alarms", v.active_alarms}};
 }
 
+void FleetManager::load_store() {
+  if (store_path_.empty()) return;
+  std::ifstream in(store_path_);
+  if (!in) return;
+  try {
+    nlohmann::json doc;
+    in >> doc;
+    if (!doc.contains("twins") || !doc["twins"].is_array()) return;
+    for (const auto& item : doc["twins"]) {
+      auto twin = enrich(item.get<device_twin::DrawerTwin>());
+      if (!twin.drawer_id.empty()) twins_[twin.drawer_id] = twin;
+    }
+  } catch (const std::exception& e) {
+    LOG_ERROR("fleet_store_load_failed", {{"path", store_path_}, {"err", e.what()}});
+  }
+}
+
+void FleetManager::save_store_locked() const {
+  if (store_path_.empty()) return;
+  try {
+    auto parent = std::filesystem::path(store_path_).parent_path();
+    if (!parent.empty()) std::filesystem::create_directories(parent);
+    nlohmann::json twins = nlohmann::json::array();
+    for (const auto& item : twins_) twins.push_back(item.second);
+    std::ofstream out(store_path_, std::ios::trunc);
+    out << nlohmann::json{{"schema", 1}, {"twins", twins}}.dump(2) << "\n";
+  } catch (const std::exception& e) {
+    LOG_ERROR("fleet_store_save_failed", {{"path", store_path_}, {"err", e.what()}});
+  }
+}
+
 device_twin::DrawerTwin FleetManager::enrich(device_twin::DrawerTwin twin) const {
   std::string ts = now_iso();
   twin.health = health_.score(twin.health);
@@ -57,6 +96,8 @@ void FleetManager::upsert(device_twin::DrawerTwin twin) {
   auto enriched = enrich(std::move(twin));
   std::lock_guard<std::mutex> lk(mu_);
   twins_[enriched.drawer_id] = enriched;
+  save_store_locked();
+  publish_metrics_locked(metrics_locked());
 }
 
 std::vector<device_twin::DrawerTwin> FleetManager::list() const {
@@ -78,6 +119,12 @@ std::optional<device_twin::DrawerTwin> FleetManager::get(const std::string& draw
 
 FleetMetrics FleetManager::metrics() const {
   std::lock_guard<std::mutex> lk(mu_);
+  auto out = metrics_locked();
+  publish_metrics_locked(out);
+  return out;
+}
+
+FleetMetrics FleetManager::metrics_locked() const {
   FleetMetrics out;
   out.total_drawers = static_cast<int>(twins_.size());
   int health_sum = 0;
@@ -93,15 +140,30 @@ FleetMetrics FleetManager::metrics() const {
   }
   out.average_health_score =
       out.total_drawers == 0 ? 0.0 : static_cast<double>(health_sum) / out.total_drawers;
-
-  obs::M().gauge("register_fleet_total_drawers", "Fleet drawer count").set(out.total_drawers);
-  obs::M().gauge("register_fleet_online_drawers", "Online fleet drawer count").set(out.online_drawers);
-  obs::M().gauge("register_fleet_unhealthy_drawers", "Unhealthy fleet drawer count")
-      .set(out.unhealthy_drawers);
-  obs::M().gauge("register_fleet_average_health_score", "Average fleet health score")
-      .set(out.average_health_score);
-  obs::M().gauge("register_fleet_active_alarms", "Active fleet alarm count").set(out.active_alarms);
   return out;
+}
+
+void FleetManager::publish_metrics_locked(const FleetMetrics& metrics) const {
+  obs::M().gauge("register_fleet_total_drawers", "Fleet drawer count").set(metrics.total_drawers);
+  obs::M().gauge("register_fleet_online_drawers", "Online fleet drawer count").set(metrics.online_drawers);
+  obs::M().gauge("register_fleet_unhealthy_drawers", "Unhealthy fleet drawer count")
+      .set(metrics.unhealthy_drawers);
+  obs::M().gauge("register_fleet_average_health_score", "Average fleet health score")
+      .set(metrics.average_health_score);
+  obs::M().gauge("register_fleet_active_alarms", "Active fleet alarm count").set(metrics.active_alarms);
+
+  std::map<std::pair<std::string, std::string>, int> alert_counts;
+  for (const auto& item : twins_) {
+    for (const auto& alert : item.second.alerts) {
+      ++alert_counts[{alert.severity, alert.type}];
+    }
+  }
+  for (const auto& item : alert_counts) {
+    obs::M()
+        .gauge("register_fleet_alerts", "Fleet alerts by severity and type",
+               {{"severity", item.first.first}, {"type", item.first.second}})
+        .set(item.second);
+  }
 }
 
 void FleetManager::record_history(const std::string& drawer_id, device_twin::HistoryEvent event) {
@@ -111,6 +173,8 @@ void FleetManager::record_history(const std::string& drawer_id, device_twin::His
   if (event.id.empty()) event.id = id_for("hist", drawer_id, it->second.history.size() + 1);
   if (event.occurred_at.empty()) event.occurred_at = now_iso();
   it->second.history.push_back(std::move(event));
+  save_store_locked();
+  publish_metrics_locked(metrics_locked());
 }
 
 device_twin::DrawerTwin make_local_default_twin() {
@@ -138,8 +202,10 @@ device_twin::DrawerTwin make_local_default_twin() {
 
 FleetManager& default_manager() {
   static FleetManager* manager = [] {
-    auto* m = new FleetManager();
-    m->upsert(make_local_default_twin());
+    const char* env = std::getenv("REGISTER_MVP_TWIN_STORE");
+    std::string path = env && *env ? std::string(env) : "data/device_twin.json";
+    auto* m = new FleetManager(path);
+    if (m->list().empty()) m->upsert(make_local_default_twin());
     return m;
   }();
   return *manager;

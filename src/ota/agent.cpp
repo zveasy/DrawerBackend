@@ -86,6 +86,7 @@ OtaResult Agent::run_once() {
     if (epos == std::string::npos) epos = verify_payload.rfind('}');
     verify_payload.erase(spos, epos - spos);
   }
+  if (cfg_.ota.require_signed && cfg_.ota.key_pub.empty()) return {false, "sig_key"};
   if (cfg_.ota.require_signed && cfg_.ota.key_pub.size()>0) {
     std::string pub = read_file(cfg_.ota.key_pub);
     if (!ed25519::verify_pem(pub, verify_payload, sig)) return {false, "sig"};
@@ -106,4 +107,3 @@ OtaResult Agent::run_once() {
 }
 
 } // namespace ota
-

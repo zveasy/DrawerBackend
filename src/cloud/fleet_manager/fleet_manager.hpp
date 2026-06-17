@@ -27,6 +27,7 @@ void to_json(nlohmann::json& j, const FleetMetrics& v);
 
 class FleetManager {
  public:
+  explicit FleetManager(std::string store_path = "");
   void upsert(device_twin::DrawerTwin twin);
   std::vector<device_twin::DrawerTwin> list() const;
   std::optional<device_twin::DrawerTwin> get(const std::string& drawer_id) const;
@@ -35,9 +36,14 @@ class FleetManager {
 
  private:
   device_twin::DrawerTwin enrich(device_twin::DrawerTwin twin) const;
+  void load_store();
+  void save_store_locked() const;
+  FleetMetrics metrics_locked() const;
+  void publish_metrics_locked(const FleetMetrics& metrics) const;
 
   mutable std::mutex mu_;
   std::unordered_map<std::string, device_twin::DrawerTwin> twins_;
+  std::string store_path_;
   analytics::HealthScoringEngine health_;
   analytics::PredictiveMaintenanceEngine maintenance_;
   analytics::InventoryForecastEngine inventory_;

@@ -49,7 +49,7 @@ Common runtime modes:
 ## Fleet API
 
 The local HTTP server exposes read-only fleet intelligence endpoints seeded with
-the local drawer twin in development:
+the local drawer twin in development and persisted to a local JSON twin store:
 
 - `GET /fleet/devices`
 - `GET /fleet/device/{id}`
@@ -60,6 +60,11 @@ the local drawer twin in development:
 
 These endpoints are additive to the existing `/txn`, `/command`, `/status`,
 `/metrics`, `/metrics.json`, and `/help` routes.
+
+Production and non-loopback API binds require authentication. Set
+`REGISTER_MVP_API_TOKEN` or `pos.key` and send `Authorization: Bearer <token>`
+for protected endpoints. `/healthz` remains unauthenticated for local
+healthchecks.
 
 ## Docker Compose
 
@@ -103,6 +108,9 @@ HTTP integration tests bind ephemeral ports on `127.0.0.1`; restricted
 sandboxes that block local socket binding must run those tests with permission to
 open localhost listeners. The tests do not require privileged ports, external
 network access, real GPIO hardware, or host firewall configuration.
+
+Real `.env` files and key/certificate material are intentionally ignored. Use
+`.env.example` and `backend/api/.env.example` as templates.
 
 ## Documentation
 

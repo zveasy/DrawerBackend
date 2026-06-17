@@ -18,8 +18,17 @@ void not_found(httplib::Response& res, const std::string& drawer_id) {
 
 }  // namespace
 
-void register_fleet_routes(httplib::Server& server, FleetManager& manager) {
-  server.Get("/fleet/devices", [&manager](const httplib::Request&, httplib::Response& res) {
+void register_fleet_routes(httplib::Server& server, FleetManager& manager,
+                           AccessCheck access_check) {
+  auto allowed = [access_check](const httplib::Request& req, httplib::Response& res) {
+    if (access_check && !access_check(req, res)) return false;
+    util::log(util::LogLevel::Info, "fleet_api_access",
+              {{"src", req.remote_addr}, {"route", req.path}});
+    return true;
+  };
+
+  server.Get("/fleet/devices", [&manager, allowed](const httplib::Request& req, httplib::Response& res) {
+    if (!allowed(req, res)) return;
     nlohmann::json devices = nlohmann::json::array();
     for (const auto& twin : manager.list()) {
       devices.push_back({{"drawer_id", twin.drawer_id},
@@ -35,14 +44,16 @@ void register_fleet_routes(httplib::Server& server, FleetManager& manager) {
   });
 
   server.Get(R"(/fleet/device/([^/]+))",
-             [&manager](const httplib::Request& req, httplib::Response& res) {
+             [&manager, allowed](const httplib::Request& req, httplib::Response& res) {
+               if (!allowed(req, res)) return;
                auto twin = manager.get(req.matches[1]);
                if (!twin) return not_found(res, req.matches[1]);
                json_response(res, *twin);
              });
 
   server.Get(R"(/fleet/device/([^/]+)/health)",
-             [&manager](const httplib::Request& req, httplib::Response& res) {
+             [&manager, allowed](const httplib::Request& req, httplib::Response& res) {
+               if (!allowed(req, res)) return;
                auto twin = manager.get(req.matches[1]);
                if (!twin) return not_found(res, req.matches[1]);
                json_response(res, {{"drawer_id", twin->drawer_id},
@@ -52,7 +63,8 @@ void register_fleet_routes(httplib::Server& server, FleetManager& manager) {
              });
 
   server.Get(R"(/fleet/device/([^/]+)/history)",
-             [&manager](const httplib::Request& req, httplib::Response& res) {
+             [&manager, allowed](const httplib::Request& req, httplib::Response& res) {
+               if (!allowed(req, res)) return;
                auto twin = manager.get(req.matches[1]);
                if (!twin) return not_found(res, req.matches[1]);
                json_response(res, {{"drawer_id", twin->drawer_id},
@@ -62,7 +74,8 @@ void register_fleet_routes(httplib::Server& server, FleetManager& manager) {
              });
 
   server.Get(R"(/fleet/device/([^/]+)/inventory)",
-             [&manager](const httplib::Request& req, httplib::Response& res) {
+             [&manager, allowed](const httplib::Request& req, httplib::Response& res) {
+               if (!allowed(req, res)) return;
                auto twin = manager.get(req.matches[1]);
                if (!twin) return not_found(res, req.matches[1]);
                json_response(res, {{"drawer_id", twin->drawer_id},
@@ -70,7 +83,8 @@ void register_fleet_routes(httplib::Server& server, FleetManager& manager) {
                                    {"forecast", twin->inventory_forecast}});
              });
 
-  server.Get("/fleet/metrics", [&manager](const httplib::Request&, httplib::Response& res) {
+  server.Get("/fleet/metrics", [&manager, allowed](const httplib::Request& req, httplib::Response& res) {
+    if (!allowed(req, res)) return;
     json_response(res, manager.metrics());
   });
 }
