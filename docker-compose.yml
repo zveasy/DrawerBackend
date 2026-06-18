@@ -91,11 +91,12 @@ services:
       - AWS_ROOT_CA=${AWS_ROOT_CA}
       - AWS_CERT=${AWS_CERT}
       - AWS_KEY=${AWS_KEY}
+      - REGISTER_MVP_API_TOKEN=${REGISTER_MVP_API_TOKEN}
     command: ["./build/register_mvp", "--api", "${API_PORT}"]
     ports:
       - "${API_PORT}:${API_PORT}"
     healthcheck:
-      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:${API_PORT}/status >/dev/null || exit 1"]
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:${API_PORT}/healthz >/dev/null || exit 1"]
       interval: 10s
       timeout: 3s
       retries: 5
@@ -121,6 +122,7 @@ services:
       - AWS_ROOT_CA=${AWS_ROOT_CA}
       - AWS_CERT=${AWS_CERT}
       - AWS_KEY=${AWS_KEY}
+      - REGISTER_MVP_API_TOKEN=${REGISTER_MVP_API_TOKEN}
     command: ["./build/register_mvp", "--pos-http", "${POS_PORT}"]
     ports:
       - "${POS_PORT}:${POS_PORT}"
@@ -152,13 +154,14 @@ services:
       - AWS_ROOT_CA=${AWS_ROOT_CA}
       - AWS_CERT=${AWS_CERT}
       - AWS_KEY=${AWS_KEY}
+      - REGISTER_MVP_API_TOKEN=${REGISTER_MVP_API_TOKEN}
     command: ["./build/register_mvp", "--api", "${API_TUI_PORT}", "--tui"]
     ports:
       - "${API_TUI_PORT}:${API_TUI_PORT}"
     tty: true
     stdin_open: true
     healthcheck:
-      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:${API_TUI_PORT}/status >/dev/null || exit 1"]
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:${API_TUI_PORT}/healthz >/dev/null || exit 1"]
       interval: 15s
       timeout: 5s
       retries: 10

@@ -1,247 +1,248 @@
-
-## Docker Compose profiles
-
-We ship a profile-based `docker-compose.yml` for local dev and production-like docs serving.
-
-- **dev profile**: `drawerbackend`, `docs` (live MkDocs), `api_tui`
-  - Start: `docker compose --profile dev up -d`
-  - Stop: `docker compose --profile dev down -v`
-
-- **prod profile (docs pipeline)**: `docs_build` (MkDocs build) ➜ `docs_prod` (NGINX)
-  - Build site: `docker compose --profile prod up docs_build`
-  - Serve site: `docker compose --profile prod up -d docs_prod`
-  - Visit: `http://localhost:${DOCS_PORT}` (defaults to 8082)
-
-Notes:
-- `docs_prod` uses `nginx:alpine` with custom config at `packaging/nginx/docs.conf`.
-- Built site is stored in named volume `docs_site`.
-- Healthchecks are enabled for API, POS, and docs.
-
-## Makefile shortcuts
-
-Common Compose flows are wrapped in the `Makefile`:
-
-```bash
-# Validate docker-compose.yml
-make compose-validate
-
-# Dev profile up/down
-make compose-dev
-make compose-dev-down
-
-# Prod docs pipeline (build + serve)
-make docs-prod
-make docs-prod-down
-
-# One-shot prod docs test with curl verification (override port if needed)
-DOCS_PORT=18082 make docs-prod-test
-
-# Inspect logs
-make docs-prod-logs
-```
-
-## CI overview
-
-GitHub Actions workflow `.github/workflows/compose-ci.yml`:
-
-- **build-and-healthcheck**
-  - Build images with BuildKit + GHA cache using `docker/bake-action`.
-  - Multi-arch cross-build (amd64, arm64) via QEMU + Buildx.
-  - Start `api`, `pos`, `docs` (dev), `api_tui` with `--no-build`.
-  - Wait for health and curl endpoints.
-  - On `main`, logs in to GHCR and conditionally pushes images tagged with commit SHA.
-  - Generates SBOMs (SPDX JSON) for built images and uploads as artifacts.
-  - Runs container vulnerability scans and uploads SARIF to GitHub Code Scanning.
-
-- **docs-prod-check**
-  - Run `docs_build` to produce the site into `docs_site` volume.
-  - Export the built site as an artifact (`docs_site.tgz`).
-  - Start `docs_prod` and wait for container health, then curl home page.
-
-The workflow uses concurrency control and job timeouts to keep CI responsive.
-
-- Nightly/weekly scheduling: runs weekly via cron to refresh caches and publish latest tags.
-- Unit tests run in a matrix across GCC and Clang.
-  - Ccache is enabled for faster incremental CI builds.
-
-## Built images (optional publishing)
-
-On the `main` branch, images are pushed to GHCR with tags:
-
-- `ghcr.io/<org>/<repo>-api:<sha>`
-- `ghcr.io/<org>/<repo>-pos:<sha>`
-- `ghcr.io/<org>/<repo>-api_tui:<sha>`
-
-You can pull those in other pipelines or environments if needed (requires GHCR auth).
-
-# register_mvp
-
-Sprint 1 & 2 — Repo, HAL, Sim Harness, and Shutter FSM.
-
-The project provides a simple GPIO abstraction with mock and libgpiod backends,
-logging helpers, a deterministic simulation harness, and a basic stepper-based
-shutter controller with homing and soft-limit logic.
-
-
-# register_mvp
-
-Sprint 1 — Repo, HAL, and Sim Harness.
-
-The project provides a simple GPIO abstraction with mock and libgpiod backends,
-logging helpers, and a deterministic simulation harness that exercises the
-components without hardware.
-
-
-## Build
-
-```bash
-# default (mock HAL)
-cmake -S . -B build -DUSE_MOCK_GPIO=ON
-cmake --build build -j
-
-./build/register_mvp --demo-shutter
-
-./build/register_mvp_sim --json
-
-
-# enable tests
-ctest --test-dir build --output-on-failure
-
-# optional: real GPIO backend (Linux)
-sudo apt-get install -y libgpiod-dev
-cmake -S . -B build-gpio -DUSE_MOCK_GPIO=OFF
-cmake --build build-gpio -j
-```
-
-
 # DrawerBackend
 
-Minimal C++17 + CMake project demonstrating a stepper-based shutter,
-parallel hopper, and HX711 scale with a mockable GPIO HAL.
+DrawerBackend is a C++17 hardware backend, cloud-ready fleet platform,
+cash-operations engine, and financial edge device platform. It controls local
+drawer hardware, exposes POS and service APIs, reports telemetry, supports OTA
+updates, models devices as cloud-managed twins, reconciles cash movement against
+physical state, and provides a shared abstraction for drawers, safes, recyclers,
+kiosks, teller stations, and ATM-like terminals.
 
 ## Architecture
 
-See [docs/architecture.md](docs/architecture.md) for an overview of the HAL, drivers, application logic, HTTP server, and test harness.
+The runtime is layered so hardware control remains isolated from fleet and cloud
+features:
 
-## Native build
+- **HAL and drivers:** GPIO abstraction, shutter stepper, parallel hopper, and
+  HX711 scale drivers.
+- **Application logic:** dispense control, transaction engine, change making,
+  audit weighing, self-test, jam clearing, service mode, EOL, and burn-in flows.
+- **Local APIs:** device HTTP API, POS HTTP/serial integrations, docs endpoint,
+  metrics endpoints, and TUI mode.
+- **Cloud and fleet:** AWS-style telemetry queueing, shadow updates, device twin
+  models, fleet manager, health scoring, predictive maintenance, inventory
+  forecasting, alerts, and aggregate fleet metrics.
+- **Cash intelligence:** durable cash ledger, reconciliation engine,
+  denomination inventory, deterministic cash forecasting, anomaly detection,
+  cash health scores, and cash dashboard models.
+- **Trust evidence:** VEIL client boundary, portable trust evidence records,
+  append-only hash chains, deterministic bundle exports, policy gates, and
+  local trust score summaries.
+- **Financial edge platform:** generic device types, capabilities, mock vendor
+  drivers, multi-compartment inventory, simulators, generic commands,
+  health/risk summaries, and trust-evidenced high-risk operations.
+- **Fleet operations:** location-aware enrollment, device lifecycle control,
+  durable remote command queues, heartbeat freshness, deterministic fleet risk,
+  quarantine/recovery, and replayable operation events.
+- **Operations:** Docker Compose, systemd packaging, hardening scripts, CI,
+  Kubernetes Helm chart, Terraform scaffolding, and support documentation.
+- **Square backend:** a separate TypeScript/Express service under `backend/api`
+  processes Square webhooks and records merchant/drawer ledger state.
+
+See [docs/architecture.md](docs/architecture.md), [docs/device_twin.md](docs/device_twin.md),
+and [docs/fleet_management.md](docs/fleet_management.md) for deeper design notes.
+
+## Native Build
 
 ```bash
 cmake -S . -B build -DUSE_MOCK_GPIO=ON
 cmake --build build -j
-./build/register_mvp
+./build/register_mvp --api 8080
 ```
 
-Pass `-DUSE_MOCK_GPIO=OFF` to use libgpiod on hardware (requires `libgpiod-dev`).
+Use `-DUSE_MOCK_GPIO=OFF` on Linux hardware with `libgpiod-dev` installed.
 
-## Docker
-
-Build and run with mock GPIO (works on any host that has Docker):
+Common runtime modes:
 
 ```bash
-docker build -t register_mvp .
-docker run --rm register_mvp
+./build/register_mvp --demo-shutter
+./build/register_mvp --dispense 4
+./build/register_mvp --pos-http 9090
+./build/register_mvp --api 8080 --tui
 ```
 
-To access real GPIO, build without the mock and map the gpiochip device:
+## Pilot Cloud Architecture
+
+DrawerBackend remains a local hardware daemon first: dispensing, shutter,
+hopper, scale, POS, and emergency service behavior continue to run on the
+appliance. The pilot cloud layer adds a control-plane abstraction around device
+twins so a cloud service can become the source of truth while the appliance
+keeps a durable local JSON cache for offline operation.
+
+Pilot device twins now carry deployment metadata (`device_id`, `merchant_id`,
+`region`, `environment`, and `deployment_channel`), sync state
+(`sync_status`, `last_synced_at`, local/remote revisions, and conflict flags),
+and international inventory metadata. Disabled or revoked devices are prevented
+from submitting fleet updates, receiving local commands, or applying OTA
+updates.
+
+The production-integration layer adds an authenticated HTTP cloud contract for
+twin push/pull, one-time enrollment token validation, certificate identity
+lifecycle tracking, and OTA release eligibility APIs. The local JSON twin store
+remains the offline cache and an offline sync queue preserves device updates
+while the cloud endpoint is unavailable.
+
+Generation 1 adds a centralized fleet-control plane for organizations,
+merchants, branches, regions, device registry, heartbeats, remote commands,
+alerts, metrics, audit events, and dashboard views. The APIs are tenant-aware
+through `X-Org-Id` and protected by the same fail-closed API authentication as
+the existing appliance and fleet routes.
+
+Generation 2 adds cash intelligence and reconciliation: every cash-affecting
+event can be recorded in a durable ledger, reconciled against observed drawer
+state, analyzed for denomination drift and deterministic depletion forecasts,
+scored for cash health, and surfaced through tenant-aware cash dashboards.
+Anomaly detection raises fleet alerts when a fleet control plane is attached.
+
+Generation 3 adds VEIL trust evidence integration. Device, cash, command, OTA,
+enrollment, reconciliation, anomaly, and certificate events can be represented
+as portable trust evidence, chained locally, verified deterministically, exported
+as evidence bundles, policy-checked through a clean VEIL client interface, and
+summarized as local trust scores for VEIL ingestion.
+
+Generation 4 adds a generalized financial edge abstraction for cash drawers,
+smart safes, cash recyclers, teller stations, kiosks, and ATM-like terminals.
+Devices register capabilities, execute generic commands through mock vendor
+drivers, track multi-compartment inventory, simulate faults and telemetry, feed
+health/risk scoring, and emit VEIL evidence for high-risk operations.
+
+Generation 5 adds the fleet operations and remote command layer. Devices are
+assigned to tenant fleets, groups, branches, and locations; lifecycle
+transitions are validated; command delivery is capability and VEIL gated;
+heartbeats fail closed when stale or inconsistent; and deterministic risk
+factors drive quarantine and evidence-backed recovery.
+
+See [docs/device_enrollment.md](docs/device_enrollment.md),
+[docs/international_deployment.md](docs/international_deployment.md),
+[docs/ota_safety_model.md](docs/ota_safety_model.md), and
+[docs/production_gaps.md](docs/production_gaps.md). Production integration
+contracts are documented in [docs/cloud_sync_contract.md](docs/cloud_sync_contract.md),
+[docs/production_enrollment_flow.md](docs/production_enrollment_flow.md),
+[docs/ota_release_lifecycle.md](docs/ota_release_lifecycle.md), and
+[docs/mtls_lifecycle.md](docs/mtls_lifecycle.md). Generation 1 fleet operations
+are documented in [docs/fleet_control_plane.md](docs/fleet_control_plane.md).
+Generation 2 cash operations are documented in
+[docs/cash_intelligence.md](docs/cash_intelligence.md). Generation 3 trust
+evidence integration is documented in
+[docs/veil_trust_integration.md](docs/veil_trust_integration.md). Generation 4
+financial edge platform behavior is documented in
+[docs/financial_edge_platform.md](docs/financial_edge_platform.md). Generation
+5 fleet operations are documented in
+[docs/fleet_operations.md](docs/fleet_operations.md).
+
+## Fleet API
+
+The local HTTP server exposes read-only fleet intelligence endpoints seeded with
+the local drawer twin in development, persisted to a local JSON twin cache, and
+prepared to sync through the cloud control-plane interface:
+
+- `GET /fleet/devices`
+- `GET /fleet/device/{id}`
+- `GET /fleet/device/{id}/health`
+- `GET /fleet/device/{id}/history`
+- `GET /fleet/device/{id}/inventory`
+- `GET /fleet/metrics`
+
+These endpoints are additive to the existing `/txn`, `/command`, `/status`,
+`/metrics`, `/metrics.json`, and `/help` routes.
+
+Centralized fleet-control endpoints are exposed under `/fleet-control/v1/*` for
+organizations, merchants, branches, regions, devices, commands, alerts, metrics,
+and dashboard views.
+
+Cash intelligence endpoints are exposed under `/cash/v1/*` for ledger entries,
+denomination inventory, reconciliation reports, forecasts, anomalies, cash
+health scores, and cash dashboard views.
+
+Trust evidence endpoints are exposed under `/trust/v1/*` for evidence
+submission, evidence listing, chain verification, deterministic bundle exports,
+policy decision previews, and trust score summaries.
+
+Financial edge endpoints are exposed under `/edge/v1/*` for device type
+registration, capabilities, driver metadata, simulator actions, generic command
+execution, inventory views, health/risk summaries, and audit events.
+
+Fleet operations endpoints are exposed under `/fleet/v1/*` for location-aware
+device enrollment and lifecycle, secure remote commands, heartbeat ingestion,
+risk summaries, quarantine, and recovery. These routes require both API
+authentication and an `X-Org-Id` tenant scope.
+
+Production and non-loopback API binds require authentication. Set
+`REGISTER_MVP_API_TOKEN` or `pos.key` and send `Authorization: Bearer <token>`
+for protected endpoints. `/healthz` remains unauthenticated for local
+healthchecks.
+
+## Docker Compose
+
+Dev profile:
 
 ```bash
-docker build -t register_mvp --build-arg USE_MOCK_GPIO=OFF .
-docker run --rm --device /dev/gpiochip0 register_mvp
+docker compose --profile dev up -d
+docker compose --profile dev down -v
 ```
 
-For a persistent development container that works across operating systems, use
-the included Docker Compose file:
+Production-like docs profile:
 
 ```bash
-docker compose up -d --build
-docker compose exec drawerbackend bash
+docker compose --profile prod up docs_build
+docker compose --profile prod up -d docs_prod
 ```
 
-When you're finished, shut down the container with:
+The Makefile wraps common flows:
 
 ```bash
-docker compose down
-```
-
-
-
-## Dev container
-
-Open the folder in [VS Code Dev Containers](https://code.visualstudio.com/docs/remote/containers) or GitHub Codespaces and the Docker image will build automatically. The container maps `/dev/gpiochip0` and runs:
-
-```
-cmake -S . -B build -DUSE_MOCK_GPIO=ON && cmake --build build -j
-```
-
-so the project is ready to run:
-
-```
-./build/register_mvp
-```
-
-## Makefile quickstart
-
-Common workflows are wrapped in a Makefile:
-
-```bash
-# configure + build
 make build
-
-# run unit tests (after configuring with -DBUILD_TESTING=ON)
 make test
-
-# start/stop all dev services (API:8080, Docs API:8082, POS:9090, TUI:8081)
 make dev-up
-make dev-down
-
-# tail all service logs
-make tail-logs
-
-# run smoke tests against running services
 make smoke
+make compose-dev
+make docs-prod-test
 ```
 
-## Docs endpoint
-
-The API serves docs under `/help`.
-
-- Root is controlled by env var `REGISTER_MVP_DOCS_PATH` (defaults to `/opt/register_mvp/share/docs`).
-- Index: `GET /help` lists available documents.
-- Files: `GET /help/<name>` serves files directly from the docs root.
-- Fallback: if a `.html` file is not found, the server will attempt the corresponding `.md` file. For example, `/help/index.html` will serve `index.md` if present.
-
-## Smoke tests
-
-With dev services running (via `make dev-up`), run:
+## Tests
 
 ```bash
-make smoke
+cmake -S . -B build -DBUILD_TESTING=ON -DUSE_MOCK_GPIO=ON
+cmake --build build -j
+ctest --test-dir build --output-on-failure
 ```
 
-This verifies:
+New fleet and cash tests cover health scoring, predictive maintenance, inventory
+forecasting, alert generation, device history, fleet API responses, cloud sync
+state, enrollment metadata, conflict handling, and international inventory
+validation, cash ledger persistence, denomination math, reconciliation
+statuses, anomaly alerts, cash health explainability, dashboard aggregation, and
+cash API authorization. VEIL trust tests cover the local client boundary,
+evidence creation, hash chaining, tamper/missing-link/duplicate/out-of-order
+detection, deterministic bundles, policy unavailable behavior, fail-closed
+production gates, local dev allow behavior, trust score explainability, and
+trust API authorization. Edge platform tests cover drawer compatibility, device
+type registration, capability validation, unsupported command rejection, mock
+driver execution, simulator behavior, multi-compartment inventory,
+policy-gated commands, trust evidence generation, health/risk scoring, and edge
+API authorization. Fleet operations tests cover tenant isolation, enrollment
+and irreversible retirement, lifecycle transitions, command approval and state
+transitions, cancellation and expiration, capability and VEIL denial,
+heartbeat freshness, offline rejection, deterministic risk scoring,
+quarantine/recovery prerequisites, event replay, and API authorization.
 
-- API `/version` and `/status`
-- Docs `/help` index and `/help/index.html` fallback to Markdown
-- POS `/ping`
+HTTP integration tests bind ephemeral ports on `127.0.0.1`; restricted
+sandboxes that block local socket binding must run those tests with permission to
+open localhost listeners. The tests do not require privileged ports, external
+network access, real GPIO hardware, or host firewall configuration.
 
+Real `.env` files and key/certificate material are intentionally ignored. Use
+`.env.example` and `backend/api/.env.example` as templates.
 
-## Formatting and Linting
-
-This project uses [pre-commit](https://pre-commit.com/) with `clang-format` and `clang-tidy` to keep the C++ codebase consistent and catch common mistakes.
-
-### Setup
+TypeScript dependency hygiene for the Square webhook backend:
 
 ```bash
-pip install pre-commit
-pre-commit install
+cd backend/api
+npm run audit:pilot
+npm run sbom
 ```
 
-### Usage
+## Documentation
 
-Run all checks against the entire repository:
-
-```bash
-pre-commit run --all-files
-```
-
-Pre-commit will automatically format sources and report any issues from `clang-tidy`.
+Operational and manufacturing docs live under `docs/`, including POS contracts,
+provisioning, security hardening, release process, SLOs, compliance procedures,
+installer guides, service manuals, RMA process, runbooks, and training material.

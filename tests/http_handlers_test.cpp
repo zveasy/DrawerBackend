@@ -1,6 +1,7 @@
 #include <gtest/gtest.h>
 #include <filesystem>
 #include "../src/server/http_server.hpp"
+#include "../src/cloud/fleet_manager/fleet_manager.hpp"
 #include <httplib.h>
 #include "ssl_helpers.hpp"
 #include <cstdlib>
@@ -212,6 +213,92 @@ TEST_P(HttpHandlers, MetricsRequireAuth) {
     EXPECT_EQ(401, resj->status);
   }
   srv.stop();
+}
+
+TEST_P(HttpHandlers, FleetAndMetricsRequireAuthWithToken) {
+  bool tls = GetParam();
+  std::filesystem::remove_all("data");
+  FakeShutter sh;
+  FakeDispenser disp;
+  TxnConfig cfg;
+  TxnEngine eng(sh, disp, cfg);
+  std::string cert, key;
+  if (tls) write_test_cert(std::filesystem::temp_directory_path() / "httptest_fleet_auth", cert, key);
+  HttpServer srv(eng, sh, disp);
+  ASSERT_TRUE(tls ? srv.start("127.0.0.1", 0, cert, key, "tok")
+                  : srv.start("127.0.0.1", 0, "", "", "tok"));
+  if (tls) {
+    httplib::SSLClient cli("127.0.0.1", srv.port());
+    cli.enable_server_certificate_verification(false);
+    auto fleet = cli.Get("/fleet/devices");
+    ASSERT_TRUE(fleet);
+    EXPECT_EQ(401, fleet->status);
+    auto metrics = cli.Get("/metrics");
+    ASSERT_TRUE(metrics);
+    EXPECT_EQ(401, metrics->status);
+    httplib::Headers auth{{"Authorization", "Bearer tok"}};
+    auto ok = cli.Get("/fleet/devices", auth);
+    ASSERT_TRUE(ok);
+    EXPECT_EQ(200, ok->status);
+  } else {
+    httplib::Client cli("127.0.0.1", srv.port());
+    auto fleet = cli.Get("/fleet/devices");
+    ASSERT_TRUE(fleet);
+    EXPECT_EQ(401, fleet->status);
+    auto metrics = cli.Get("/metrics");
+    ASSERT_TRUE(metrics);
+    EXPECT_EQ(401, metrics->status);
+    httplib::Headers auth{{"Authorization", "Bearer tok"}};
+    auto ok = cli.Get("/fleet/devices", auth);
+    ASSERT_TRUE(ok);
+    EXPECT_EQ(200, ok->status);
+  }
+  srv.stop();
+}
+
+TEST(HttpHandlers, RejectsProductionStartupWithoutAuth) {
+  const char* old_token = std::getenv("REGISTER_MVP_API_TOKEN");
+  std::string saved_token = old_token ? old_token : "";
+  unsetenv("REGISTER_MVP_API_TOKEN");
+  setenv("REGISTER_MVP_ENV", "production", 1);
+  FakeShutter sh;
+  FakeDispenser disp;
+  TxnConfig cfg;
+  TxnEngine eng(sh, disp, cfg);
+  HttpServer srv(eng, sh, disp);
+  EXPECT_FALSE(srv.start("127.0.0.1", 0));
+  unsetenv("REGISTER_MVP_ENV");
+  if (old_token) setenv("REGISTER_MVP_API_TOKEN", saved_token.c_str(), 1);
+}
+
+TEST(HttpHandlers, DisabledLocalDrawerRejectsTxnAndCommand) {
+  std::filesystem::remove_all("data");
+  auto disabled = cloud::fleet_manager::make_local_default_twin();
+  disabled.disabled = true;
+  disabled.sync_status = "disabled";
+  cloud::fleet_manager::default_manager().upsert(disabled);
+
+  FakeShutter sh;
+  FakeDispenser disp;
+  TxnConfig cfg;
+  TxnEngine eng(sh, disp, cfg);
+  HttpServer srv(eng, sh, disp);
+  ASSERT_TRUE(srv.start("127.0.0.1", 0));
+
+  httplib::Client cli("127.0.0.1", srv.port());
+  auto txn = cli.Post("/txn", "{\"price\":735,\"deposit\":1000}", "application/json");
+  ASSERT_TRUE(txn);
+  EXPECT_EQ(423, txn->status);
+  EXPECT_NE(std::string::npos, txn->body.find("device_disabled"));
+
+  auto cmd = cli.Post("/command", "{\"dispense\":2}", "application/json");
+  ASSERT_TRUE(cmd);
+  EXPECT_EQ(423, cmd->status);
+  EXPECT_NE(std::string::npos, cmd->body.find("device_disabled"));
+
+  srv.stop();
+  auto enabled = cloud::fleet_manager::make_local_default_twin();
+  cloud::fleet_manager::default_manager().upsert(enabled);
 }
 
 INSTANTIATE_TEST_SUITE_P(HttpAndHttps, HttpHandlers, ::testing::Values(false, true));

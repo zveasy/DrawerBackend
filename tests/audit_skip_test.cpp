@@ -1,8 +1,7 @@
 #include <gtest/gtest.h>
-#include <cstdio>
-#include <string>
 
 #include "../src/app/audit.hpp"
+#include "../src/util/cli_options.hpp"
 
 TEST(AuditSkip, NullScale) {
   audit::Config cfg;
@@ -11,12 +10,14 @@ TEST(AuditSkip, NullScale) {
 }
 
 TEST(AuditSkip, CliSkips) {
-  FILE* fp = popen("../register_mvp --json dispense 3", "r");
-  ASSERT_NE(fp, nullptr);
-  char buf[256];
-  std::string out;
-  while (fgets(buf, sizeof(buf), fp)) out += buf;
-  int rc = pclose(fp);
-  EXPECT_NE(rc, -1);
-  EXPECT_NE(out.find("\"skipped\":true"), std::string::npos);
+  const char* argv[] = {"register_mvp", "dispense", "3", "--json"};
+  CliOptions opts;
+  ASSERT_EQ(0, opts.parse(4, const_cast<char**>(argv)));
+  EXPECT_TRUE(opts.log_json);
+  EXPECT_EQ(3, opts.dispense_n);
+  EXPECT_FALSE(opts.use_scale);
+
+  audit::Config cfg;
+  auto res = audit::run(nullptr, cfg, opts.dispense_n);
+  EXPECT_TRUE(res.skipped);
 }

@@ -238,6 +238,7 @@ jobs:
           POS_PORT: "9090"
           DOCS_PORT: "8082"
           API_TUI_PORT: "8081"
+          REGISTER_MVP_API_TOKEN: "ci-token"
         run: |
           docker compose up -d --no-build api pos docs api_tui
 

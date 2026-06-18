@@ -3,13 +3,52 @@
 #include <sstream>
 #include <algorithm>
 #include <chrono>
+#include <cstdlib>
 #include <mutex>
 #include <string>
 #include <nlohmann/json.hpp>
 #include "obs/metrics.hpp"
 #include "server/version_endpoint.hpp"
 #include "server/docs_endpoint.hpp"
+#include "cloud/cash_intelligence/routes.hpp"
+#include "cloud/fleet_manager/fleet_routes.hpp"
+#include "cloud/fleet_control/routes.hpp"
+#include "cloud/fleet_operations/routes.hpp"
+#include "edge_platform/routes.hpp"
+#include "integrations/veil/routes.hpp"
+#include "ops/operational_status.hpp"
 #include "util/log.hpp"
+
+namespace {
+
+bool env_true(const char* name) {
+  const char* value = std::getenv(name);
+  return value && (std::string(value) == "1" || std::string(value) == "true" ||
+                   std::string(value) == "TRUE" || std::string(value) == "yes");
+}
+
+bool production_mode() {
+  const char* env = std::getenv("REGISTER_MVP_ENV");
+  const char* node_env = std::getenv("NODE_ENV");
+  return env_true("REGISTER_MVP_PRODUCTION") ||
+         (env && std::string(env) == "production") ||
+         (node_env && std::string(node_env) == "production");
+}
+
+bool is_loopback_bind(const std::string& bind) {
+  return bind.empty() || bind == "127.0.0.1" || bind == "localhost" || bind == "::1";
+}
+
+bool is_health_path(const std::string& path) {
+  return path == "/healthz";
+}
+
+bool is_protected_path(const std::string& path) {
+  if (is_health_path(path)) return false;
+  return true;
+}
+
+}  // namespace
 
 struct HttpServer::Impl {
   std::unique_ptr<httplib::Server> server;
@@ -43,6 +82,7 @@ struct HttpServer::Impl {
   };
   RateLimiter txn_limiter{4.0, 0.1};
   RateLimiter cmd_limiter{4.0, 0.1};
+  bool allow_unauth_loopback{false};
 };
 
 HttpServer::HttpServer(TxnEngine& engine, IShutter& shutter, IDispenser& dispenser)
@@ -54,6 +94,19 @@ bool HttpServer::start(const std::string& bind, int port, const std::string& cer
                        const std::string& key, const std::string& token) {
   if (impl_->th.joinable()) return false;
   auth_key_ = token;
+  if (auth_key_.empty()) {
+    const char* env_token = std::getenv("REGISTER_MVP_API_TOKEN");
+    if (env_token) auth_key_ = env_token;
+  }
+  bool has_auth = !auth_key_.empty();
+  bool loopback = is_loopback_bind(bind);
+  bool prod = production_mode();
+  impl_->allow_unauth_loopback = !has_auth && loopback && !prod;
+  if (!has_auth && (prod || !loopback)) {
+    LOG_ERROR("api_auth_config_unsafe",
+              {{"bind", bind}, {"production", prod ? "1" : "0"}, {"reason", "missing_token"}});
+    return false;
+  }
   if (!cert.empty() && !key.empty()) {
     impl_->server = std::make_unique<httplib::SSLServer>(cert.c_str(), key.c_str());
   } else {
@@ -116,8 +169,32 @@ void HttpServer::setup_routes() {
       return out;
     }(":" + token);
   }
-  svr.set_pre_routing_handler([this, token, basic](const httplib::Request& req,
-                                                  httplib::Response& res) {
+  auto authorize = [this, token, basic](const httplib::Request& req, httplib::Response& res) {
+    if (!is_protected_path(req.path)) return true;
+    if (impl_->allow_unauth_loopback) return true;
+    auto auth = req.get_header_value("Authorization");
+    if (!token.empty() && (auth == ("Bearer " + token) || auth == basic)) return true;
+    res.status = 401;
+    res.set_header("WWW-Authenticate", "Basic realm=\"\"");
+    res.set_content("{\"error\":\"unauthorized\"}", "application/json");
+    util::log(util::LogLevel::Warn, "http_auth_failure",
+              {{"src", req.remote_addr}, {"route", req.path}, {"status", "401"}});
+    return false;
+  };
+  cloud::fleet_manager::register_fleet_routes(svr, cloud::fleet_manager::default_manager(), authorize);
+  cloud::fleet_control::register_fleet_control_routes(
+      svr, cloud::fleet_control::default_control_plane(), authorize);
+  cloud::fleet_operations::register_fleet_operations_routes(
+      svr, cloud::fleet_operations::default_fleet_operations(), authorize);
+  cloud::cash_intelligence::register_cash_intelligence_routes(
+      svr, cloud::cash_intelligence::default_cash_service(), authorize);
+  integrations::veil::register_trust_routes(
+      svr, integrations::veil::default_trust_service(), authorize);
+  edge_platform::register_edge_routes(
+      svr, edge_platform::default_edge_platform(), authorize);
+
+  svr.set_pre_routing_handler([this, authorize](const httplib::Request& req,
+                                               httplib::Response& res) {
     auto log_err = [&](const std::string& reason) {
       if (req.path == "/txn" || req.path == "/command") {
         auto lvl = res.status >= 500 ? util::LogLevel::Error : util::LogLevel::Warn;
@@ -143,14 +220,17 @@ void HttpServer::setup_routes() {
         return httplib::Server::HandlerResponse::Handled;
       }
     }
-    if (!token.empty()) {
-      auto auth = req.get_header_value("Authorization");
-      if (auth == ("Bearer " + token) || auth == basic) {
-        return httplib::Server::HandlerResponse::Unhandled;
+    if (req.path == "/txn" || req.path == "/command") {
+      auto local = cloud::fleet_manager::default_manager().get("local-drawer");
+      if (local && local->disabled) {
+        res.status = 423;
+        res.set_content("{\"error\":\"device_disabled\"}", "application/json");
+        util::log(util::LogLevel::Warn, "device_command_blocked",
+                  {{"src", req.remote_addr}, {"route", req.path}, {"reason", "disabled"}});
+        return httplib::Server::HandlerResponse::Handled;
       }
-      res.status = 401;
-      res.set_header("WWW-Authenticate", "Basic realm=\"\"");
-      res.set_content("{\"error\":\"unauthorized\"}", "application/json");
+    }
+    if (!authorize(req, res)) {
       log_err("unauthorized");
       return httplib::Server::HandlerResponse::Handled;
     }
@@ -204,11 +284,11 @@ void HttpServer::setup_routes() {
     auto snap = snapshot();
     bool has_last = !snap.last.id.empty();
     std::string last_json = has_last ? journal::to_json(snap.last) : std::string("{}");
-    std::ostringstream oss;
-    oss << "{\"in_progress\":" << (snap.in_progress ? "true" : "false")
-        << ",\"last\":" << (has_last ? last_json : "{}") << ",\"version\":\"" << snap.version
-        << "\"}";
-    res.set_content(oss.str(), "application/json");
+    nlohmann::json status = {{"in_progress", snap.in_progress},
+                             {"last", has_last ? nlohmann::json::parse(last_json) : nlohmann::json::object()},
+                             {"version", snap.version}};
+    status["operational"] = ops::current_status();
+    res.set_content(status.dump(), "application/json");
   });
 
   svr.Post("/command", [this](const httplib::Request& req, httplib::Response& res) {
@@ -299,30 +379,12 @@ void HttpServer::setup_routes() {
                {"reason", "bad_request"}});
   });
 
-  svr.Get("/metrics", [token, basic](const httplib::Request& req, httplib::Response& res) {
-    if (!token.empty()) {
-      auto auth = req.get_header_value("Authorization");
-      if (auth != ("Bearer " + token) && auth != basic) {
-        res.status = 401;
-        res.set_header("WWW-Authenticate", "Basic realm=\"\"");
-        res.set_content("{\"error\":\"unauthorized\"}", "application/json");
-        return;
-      }
-    }
+  svr.Get("/metrics", [](const httplib::Request&, httplib::Response& res) {
     std::ostringstream oss;
     obs::M().to_prometheus(oss);
     res.set_content(oss.str(), "text/plain");
   });
-  svr.Get("/metrics.json", [token, basic](const httplib::Request& req, httplib::Response& res) {
-    if (!token.empty()) {
-      auto auth = req.get_header_value("Authorization");
-      if (auth != ("Bearer " + token) && auth != basic) {
-        res.status = 401;
-        res.set_header("WWW-Authenticate", "Basic realm=\"\"");
-        res.set_content("{\"error\":\"unauthorized\"}", "application/json");
-        return;
-      }
-    }
+  svr.Get("/metrics.json", [](const httplib::Request&, httplib::Response& res) {
     std::ostringstream oss;
     obs::M().to_json(oss);
     res.set_content(oss.str(), "application/json");
