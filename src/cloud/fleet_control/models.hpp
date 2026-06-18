@@ -45,6 +45,7 @@ struct Branch {
 
 struct DeviceRegistryRecord {
   std::string device_id;
+  std::string device_type{"cash_drawer"};
   std::string organization_id;
   std::string merchant_id;
   std::string branch_id;
@@ -62,6 +63,7 @@ struct DeviceRegistryRecord {
   int transaction_failures{0};
   int ota_failures{0};
   int sync_failures{0};
+  std::vector<std::string> capabilities;
   std::vector<std::string> tags;
   Labels labels;
 };

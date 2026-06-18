@@ -1,10 +1,11 @@
 # DrawerBackend
 
-DrawerBackend is a C++17 hardware backend, cloud-ready fleet platform, and
-cash-operations engine for a cash/change dispensing appliance. It controls local
+DrawerBackend is a C++17 hardware backend, cloud-ready fleet platform,
+cash-operations engine, and financial edge device platform. It controls local
 drawer hardware, exposes POS and service APIs, reports telemetry, supports OTA
-updates, models each drawer as a cloud-managed device twin, and reconciles cash
-movement against physical drawer state.
+updates, models devices as cloud-managed twins, reconciles cash movement against
+physical state, and provides a shared abstraction for drawers, safes, recyclers,
+kiosks, teller stations, and ATM-like terminals.
 
 ## Architecture
 
@@ -26,6 +27,9 @@ features:
 - **Trust evidence:** VEIL client boundary, portable trust evidence records,
   append-only hash chains, deterministic bundle exports, policy gates, and
   local trust score summaries.
+- **Financial edge platform:** generic device types, capabilities, mock vendor
+  drivers, multi-compartment inventory, simulators, generic commands,
+  health/risk summaries, and trust-evidenced high-risk operations.
 - **Operations:** Docker Compose, systemd packaging, hardening scripts, CI,
   Kubernetes Helm chart, Terraform scaffolding, and support documentation.
 - **Square backend:** a separate TypeScript/Express service under `backend/api`
@@ -92,6 +96,12 @@ as portable trust evidence, chained locally, verified deterministically, exporte
 as evidence bundles, policy-checked through a clean VEIL client interface, and
 summarized as local trust scores for VEIL ingestion.
 
+Generation 4 adds a generalized financial edge abstraction for cash drawers,
+smart safes, cash recyclers, teller stations, kiosks, and ATM-like terminals.
+Devices register capabilities, execute generic commands through mock vendor
+drivers, track multi-compartment inventory, simulate faults and telemetry, feed
+health/risk scoring, and emit VEIL evidence for high-risk operations.
+
 See [docs/device_enrollment.md](docs/device_enrollment.md),
 [docs/international_deployment.md](docs/international_deployment.md),
 [docs/ota_safety_model.md](docs/ota_safety_model.md), and
@@ -104,7 +114,9 @@ are documented in [docs/fleet_control_plane.md](docs/fleet_control_plane.md).
 Generation 2 cash operations are documented in
 [docs/cash_intelligence.md](docs/cash_intelligence.md). Generation 3 trust
 evidence integration is documented in
-[docs/veil_trust_integration.md](docs/veil_trust_integration.md).
+[docs/veil_trust_integration.md](docs/veil_trust_integration.md). Generation 4
+financial edge platform behavior is documented in
+[docs/financial_edge_platform.md](docs/financial_edge_platform.md).
 
 ## Fleet API
 
@@ -133,6 +145,10 @@ health scores, and cash dashboard views.
 Trust evidence endpoints are exposed under `/trust/v1/*` for evidence
 submission, evidence listing, chain verification, deterministic bundle exports,
 policy decision previews, and trust score summaries.
+
+Financial edge endpoints are exposed under `/edge/v1/*` for device type
+registration, capabilities, driver metadata, simulator actions, generic command
+execution, inventory views, health/risk summaries, and audit events.
 
 Production and non-loopback API binds require authentication. Set
 `REGISTER_MVP_API_TOKEN` or `pos.key` and send `Authorization: Bearer <token>`
@@ -183,7 +199,11 @@ cash API authorization. VEIL trust tests cover the local client boundary,
 evidence creation, hash chaining, tamper/missing-link/duplicate/out-of-order
 detection, deterministic bundles, policy unavailable behavior, fail-closed
 production gates, local dev allow behavior, trust score explainability, and
-trust API authorization.
+trust API authorization. Edge platform tests cover drawer compatibility, device
+type registration, capability validation, unsupported command rejection, mock
+driver execution, simulator behavior, multi-compartment inventory,
+policy-gated commands, trust evidence generation, health/risk scoring, and edge
+API authorization.
 
 HTTP integration tests bind ephemeral ports on `127.0.0.1`; restricted
 sandboxes that block local socket binding must run those tests with permission to

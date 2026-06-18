@@ -236,6 +236,10 @@ add_library(cloud
   src/integrations/veil/client.cpp
   src/integrations/veil/service.cpp
   src/integrations/veil/routes.cpp
+  src/edge_platform/models.cpp
+  src/edge_platform/driver.cpp
+  src/edge_platform/service.cpp
+  src/edge_platform/routes.cpp
 )
 target_include_directories(cloud PUBLIC . src)
 target_link_libraries(cloud PUBLIC util obs ops httplib::httplib Threads::Threads OpenSSL::Crypto)

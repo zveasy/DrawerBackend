@@ -19,7 +19,9 @@ struct PolicyConfig {
   std::set<std::string> high_risk_actions{
       "disable_device", "enable_device", "pause_transactions", "resume_transactions",
       "ota_promotion", "ota_install_eligibility", "certificate_revocation",
-      "reconciliation_override", "manual_adjustment", "command_execution"};
+      "reconciliation_override", "manual_adjustment", "command_execution",
+      "lock", "unlock", "open", "dispense_cash", "accept_cash", "rotate_keys",
+      "export_evidence", "enter_maintenance_mode"};
 };
 
 class VeilTrustService {

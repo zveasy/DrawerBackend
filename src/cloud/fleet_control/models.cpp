@@ -53,6 +53,7 @@ void from_json(const nlohmann::json& j, Branch& v) {
 
 void to_json(nlohmann::json& j, const DeviceRegistryRecord& v) {
   j = {{"device_id", v.device_id},
+       {"device_type", v.device_type},
        {"organization_id", v.organization_id},
        {"merchant_id", v.merchant_id},
        {"branch_id", v.branch_id},
@@ -70,11 +71,13 @@ void to_json(nlohmann::json& j, const DeviceRegistryRecord& v) {
        {"transaction_failures", v.transaction_failures},
        {"ota_failures", v.ota_failures},
        {"sync_failures", v.sync_failures},
+       {"capabilities", v.capabilities},
        {"tags", v.tags},
        {"labels", v.labels}};
 }
 void from_json(const nlohmann::json& j, DeviceRegistryRecord& v) {
   v.device_id = j.value("device_id", v.device_id);
+  v.device_type = j.value("device_type", v.device_type);
   v.organization_id = j.value("organization_id", v.organization_id);
   v.merchant_id = j.value("merchant_id", v.merchant_id);
   v.branch_id = j.value("branch_id", v.branch_id);
@@ -92,6 +95,7 @@ void from_json(const nlohmann::json& j, DeviceRegistryRecord& v) {
   v.transaction_failures = j.value("transaction_failures", v.transaction_failures);
   v.ota_failures = j.value("ota_failures", v.ota_failures);
   v.sync_failures = j.value("sync_failures", v.sync_failures);
+  v.capabilities = j.value("capabilities", v.capabilities);
   v.tags = j.value("tags", v.tags);
   v.labels = j.value("labels", v.labels);
 }
