@@ -21,7 +21,7 @@ struct PolicyConfig {
       "ota_promotion", "ota_install_eligibility", "certificate_revocation",
       "reconciliation_override", "manual_adjustment", "command_execution",
       "lock", "unlock", "open", "dispense_cash", "accept_cash", "rotate_keys",
-      "export_evidence", "enter_maintenance_mode"};
+      "export_evidence", "enter_maintenance_mode", "device_recovery"};
 };
 
 class VeilTrustService {

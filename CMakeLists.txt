@@ -226,6 +226,9 @@ add_library(cloud
   src/cloud/fleet_control/models.cpp
   src/cloud/fleet_control/control_plane.cpp
   src/cloud/fleet_control/routes.cpp
+  src/cloud/fleet_operations/models.cpp
+  src/cloud/fleet_operations/service.cpp
+  src/cloud/fleet_operations/routes.cpp
   src/cloud/analytics/health_scoring.cpp
   src/cloud/analytics/predictive_maintenance.cpp
   src/cloud/analytics/inventory_forecast.cpp

@@ -13,6 +13,7 @@
 #include "cloud/cash_intelligence/routes.hpp"
 #include "cloud/fleet_manager/fleet_routes.hpp"
 #include "cloud/fleet_control/routes.hpp"
+#include "cloud/fleet_operations/routes.hpp"
 #include "edge_platform/routes.hpp"
 #include "integrations/veil/routes.hpp"
 #include "ops/operational_status.hpp"
@@ -183,6 +184,8 @@ void HttpServer::setup_routes() {
   cloud::fleet_manager::register_fleet_routes(svr, cloud::fleet_manager::default_manager(), authorize);
   cloud::fleet_control::register_fleet_control_routes(
       svr, cloud::fleet_control::default_control_plane(), authorize);
+  cloud::fleet_operations::register_fleet_operations_routes(
+      svr, cloud::fleet_operations::default_fleet_operations(), authorize);
   cloud::cash_intelligence::register_cash_intelligence_routes(
       svr, cloud::cash_intelligence::default_cash_service(), authorize);
   integrations::veil::register_trust_routes(

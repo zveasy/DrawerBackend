@@ -30,6 +30,9 @@ features:
 - **Financial edge platform:** generic device types, capabilities, mock vendor
   drivers, multi-compartment inventory, simulators, generic commands,
   health/risk summaries, and trust-evidenced high-risk operations.
+- **Fleet operations:** location-aware enrollment, device lifecycle control,
+  durable remote command queues, heartbeat freshness, deterministic fleet risk,
+  quarantine/recovery, and replayable operation events.
 - **Operations:** Docker Compose, systemd packaging, hardening scripts, CI,
   Kubernetes Helm chart, Terraform scaffolding, and support documentation.
 - **Square backend:** a separate TypeScript/Express service under `backend/api`
@@ -102,6 +105,12 @@ Devices register capabilities, execute generic commands through mock vendor
 drivers, track multi-compartment inventory, simulate faults and telemetry, feed
 health/risk scoring, and emit VEIL evidence for high-risk operations.
 
+Generation 5 adds the fleet operations and remote command layer. Devices are
+assigned to tenant fleets, groups, branches, and locations; lifecycle
+transitions are validated; command delivery is capability and VEIL gated;
+heartbeats fail closed when stale or inconsistent; and deterministic risk
+factors drive quarantine and evidence-backed recovery.
+
 See [docs/device_enrollment.md](docs/device_enrollment.md),
 [docs/international_deployment.md](docs/international_deployment.md),
 [docs/ota_safety_model.md](docs/ota_safety_model.md), and
@@ -116,7 +125,9 @@ Generation 2 cash operations are documented in
 evidence integration is documented in
 [docs/veil_trust_integration.md](docs/veil_trust_integration.md). Generation 4
 financial edge platform behavior is documented in
-[docs/financial_edge_platform.md](docs/financial_edge_platform.md).
+[docs/financial_edge_platform.md](docs/financial_edge_platform.md). Generation
+5 fleet operations are documented in
+[docs/fleet_operations.md](docs/fleet_operations.md).
 
 ## Fleet API
 
@@ -149,6 +160,11 @@ policy decision previews, and trust score summaries.
 Financial edge endpoints are exposed under `/edge/v1/*` for device type
 registration, capabilities, driver metadata, simulator actions, generic command
 execution, inventory views, health/risk summaries, and audit events.
+
+Fleet operations endpoints are exposed under `/fleet/v1/*` for location-aware
+device enrollment and lifecycle, secure remote commands, heartbeat ingestion,
+risk summaries, quarantine, and recovery. These routes require both API
+authentication and an `X-Org-Id` tenant scope.
 
 Production and non-loopback API binds require authentication. Set
 `REGISTER_MVP_API_TOKEN` or `pos.key` and send `Authorization: Bearer <token>`
@@ -203,7 +219,11 @@ trust API authorization. Edge platform tests cover drawer compatibility, device
 type registration, capability validation, unsupported command rejection, mock
 driver execution, simulator behavior, multi-compartment inventory,
 policy-gated commands, trust evidence generation, health/risk scoring, and edge
-API authorization.
+API authorization. Fleet operations tests cover tenant isolation, enrollment
+and irreversible retirement, lifecycle transitions, command approval and state
+transitions, cancellation and expiration, capability and VEIL denial,
+heartbeat freshness, offline rejection, deterministic risk scoring,
+quarantine/recovery prerequisites, event replay, and API authorization.
 
 HTTP integration tests bind ephemeral ports on `127.0.0.1`; restricted
 sandboxes that block local socket binding must run those tests with permission to
