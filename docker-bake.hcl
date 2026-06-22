@@ -11,9 +11,6 @@ target "_common" {
   context    = "."
   dockerfile = "Dockerfile"
   platforms  = ["linux/amd64", "linux/arm64"]
-  labels = {
-    "org.opencontainers.image.source" = "${BAKE_ORG}/${BAKE_REPO}"
-  }
 }
 
 target "api" {

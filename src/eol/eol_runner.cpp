@@ -8,6 +8,26 @@
 
 namespace eol {
 
+namespace {
+
+std::string json_escape(const std::string& in) {
+  std::string out;
+  out.reserve(in.size());
+  for (char c : in) {
+    switch (c) {
+      case '\"': out += "\\\""; break;
+      case '\\': out += "\\\\"; break;
+      case '\n': out += "\\n"; break;
+      case '\r': out += "\\r"; break;
+      case '\t': out += "\\t"; break;
+      default: out += c; break;
+    }
+  }
+  return out;
+}
+
+}  // namespace
+
 Runner::Runner(IShutter& sh, IDispenser& disp, IScale* sc, std::string telemetry_path)
     : shutter_(sh), dispenser_(disp), scale_(sc), telemetry_path_(std::move(telemetry_path)) {}
 
@@ -75,8 +95,27 @@ EolResult Runner::run_once(const cfg::Config& cfg) {
   r.report_path = (dir / "result.json").string();
   {
     std::ofstream jf(r.report_path);
-    jf << "{\n  \"pass\":" << (r.pass?"true":"false")
-       << ",\n  \"serial\":\"" << r.serial << "\"\n}";
+    jf << "{\n";
+    jf << "  \"serial\": \"" << json_escape(r.serial) << "\",\n";
+    jf << "  \"device_id\": \"" << json_escape(r.device_id) << "\",\n";
+    jf << "  \"version\": \"" << json_escape(r.version) << "\",\n";
+    jf << "  \"pass\": " << (r.pass ? "true" : "false") << ",\n";
+    jf << "  \"dispensed\": " << r.dispensed << ",\n";
+    jf << "  \"expected_g\": " << r.expected_g << ",\n";
+    jf << "  \"measured_g\": " << r.measured_g << ",\n";
+    jf << "  \"delta_g\": " << r.delta_g << ",\n";
+    jf << "  \"steps\": [\n";
+    for (size_t i = 0; i < r.steps.size(); ++i) {
+      const auto& s = r.steps[i];
+      jf << "    {\"name\":\"" << json_escape(s.name) << "\",\"ok\":"
+         << (s.ok ? "true" : "false")
+         << ",\"reason\":\"" << json_escape(s.reason)
+         << "\",\"value\":" << s.value << "}";
+      if (i + 1 != r.steps.size()) jf << ",";
+      jf << "\n";
+    }
+    jf << "  ]\n";
+    jf << "}\n";
   }
   {
     std::ofstream cf(dir / "result.csv");

@@ -181,6 +181,8 @@ add_test(NAME power_budget_script_test COMMAND bash ${CMAKE_CURRENT_SOURCE_DIR}/
 
 add_test(NAME smoke_store_demo_script_test COMMAND bash ${CMAKE_CURRENT_SOURCE_DIR}/smoke_store_demo_script_test.sh WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
 
+add_test(NAME checklist_evidence_script_test COMMAND bash ${CMAKE_CURRENT_SOURCE_DIR}/checklist_evidence_script_test.sh WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
+
 add_executable(http_concurrency_test http_concurrency_test.cpp)
 target_include_directories(http_concurrency_test PRIVATE .. ../src)
 target_compile_features(http_concurrency_test PRIVATE cxx_std_17)
@@ -550,6 +552,15 @@ if (CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
 endif()
 target_link_libraries(eol_runner_weight_fail_test gtest_main mfg)
 gtest_discover_tests(eol_runner_weight_fail_test)
+
+add_executable(eol_runner_report_schema_test eol_runner_report_schema_test.cpp)
+target_include_directories(eol_runner_report_schema_test PRIVATE .. ../src)
+target_compile_features(eol_runner_report_schema_test PRIVATE cxx_std_17)
+if (CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+  target_compile_options(eol_runner_report_schema_test PRIVATE -Wall -Wextra -Wpedantic -O2 -g)
+endif()
+target_link_libraries(eol_runner_report_schema_test gtest_main mfg)
+gtest_discover_tests(eol_runner_report_schema_test)
 
 add_executable(provision_serial_format_test provision_serial_format_test.cpp)
 target_include_directories(provision_serial_format_test PRIVATE .. ../src)
